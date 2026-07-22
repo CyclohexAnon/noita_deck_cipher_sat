@@ -33,7 +33,7 @@ The shuffling of the deck changes accordingly: if $\mathbf{T}_{ij} = 1$, then $\
 Since kissat accepts input in CNF (conjunctive normal form), the constraints are encoded as such.
 
 ### Permutation matrices
-In order to encode a permutation matrix, $n \time n$ variables are generated. Then for the row $k$ the condition $\bigvee _i a _{ik}$ ensures at least one variable is true per row. The relation
+In order to encode a permutation matrix, $n \times n$ variables are generated. Then for the row $k$ the condition $\bigvee _i a _{ik}$ ensures at least one variable is true per row. The relation
 $\bigwedge _i \bigwedge _{j > i} \neg a _{ik} \vee \neg a _{jk}$ ensurses for row $k$ that at most one element can be true (because every possible pair must have at least one false element). The same is done for each column. In the end this results in $n^2$ variables and $n(n+1)$ conditions.
 
 For our case, $n$ is the length of the cipher text alphabet or equivalently the deck size. We need one matrix per letter in the plain text alphabet, one for the inital deck and then for each letter of plain text another deck state, giving $(\mathrm{pt\_alphabet} + \mathrm{pt\_size} + 1) \cdot n^2$ variables and $(\mathrm{pt\_alphabet} + \mathrm{pt\_size} + 1) \cdot n(n+1)$ conditions.
@@ -48,7 +48,7 @@ If the plain text is not known, we need to introduce another matrix to hold the 
 
 This is basically a matrix of size pt times pt_alphabet, and we impose constraints as for permutation matrices, but only for the rows, which encodes the fact that each true entry in this matrix corresponds to a choice for one plaintext letter.
 
-The multiplication is then modified to $\bigwedge _{i, j, k, z} \neq s _z \vee \neq a _{ik} (z) \vee \neq b _{kj} \vee c _{ij}$ with $a(z)$ being an element in one specific permutation matrix for the plain text letters. (This works because every selector variable that is set to False will, due to being negated, will trivially satisfy that specific condition and essentially make it drop out. Only one clause will remain, the chosen one).
+The multiplication is then modified to $\bigwedge _{i, j, k, z} \neg s _z \vee \neg a _{ik} (z) \vee \neg b _{kj} \vee c _{ij}$ with $a(z)$ being an element in one specific permutation matrix for the plain text letters. (This works because every selector variable that is set to False will, due to being negated, will trivially satisfy that specific condition and essentially make it drop out. Only one clause will remain, the chosen one).
 
 The new variables added amount to $\mathrm{pt\_size} \cdot \mathrm{pt\_alphabet}$ and the clauses scale with $\mathrm{pt\_alphabet} \cdot n^3$.
 
