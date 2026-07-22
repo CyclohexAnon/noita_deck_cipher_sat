@@ -19,13 +19,13 @@ If the plain text is known and should be tested, no other data structures are ne
 
 The initial deck is ordered: $\mathrm{D}(0)$ is an identity matrix.
 
-For reversibility reasons we want each plain text letter to reveal a different top card, which means that each top row of the plain text letter permutation matrices are different: $\mathbf{P}_{0*}(i) \neq \mathbf{P}_{0*}(j)$ for $i \neq j$.
+For reversibility reasons we want each plain text letter to reveal a different top card, which means that each top row of the plain text letter permutation matrices are different: $\mathbf{P} _{0*}(i) \neq \mathbf{P} _{0*}(j)$ for $i \neq j$.
 
 We also need to encode the fact that the shuffling process produces the cipher text, which means that if the $i$th cipher text letter is $\mathrm{ct}(i) = k$, the decks top row needs to reflect that: $\mathbf{D}_{0k}(i) = 1$.
 
-If on the other hand the plain text is not known, then every permutation could come from some unknown $\mathbf{P}(i)$. Therefore another matrix is used to denote one chosen position from the plaintext alphabet: $\mathbf{T} \in \mathbb{B}^{\mathrm{pt\_length} \times \mathrm{pt\_alphabet}}$. Each row $\mathrm{T}_{i*}$ must contain only one 1.
+If on the other hand the plain text is not known, then every permutation could come from some unknown $\mathbf{P}(i)$. Therefore another matrix is used to denote one chosen position from the plaintext alphabet: $\mathbf{T} \in \mathbb{B}^{\mathrm{pt\_length} \times \mathrm{pt\_alphabet}}$. Each row $\mathbf{T}_{i*}$ must contain only one 1.
 
-The shuffling of the deck changes accordingly: if $\mathrm{T}_{ij} = 1$, then $\mathbf{D}(i+1) = \mathbf{P}(j) \mathbf{D}(i)$.
+The shuffling of the deck changes accordingly: if $\mathbf{T}_{ij} = 1$, then $\mathbf{D}(i+1) = \mathbf{P}(j) \mathbf{D}(i)$.
 
 (Hopefully there werent any mistakes in that description.)
 
