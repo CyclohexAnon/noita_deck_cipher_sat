@@ -34,6 +34,28 @@ def get_cnf_permutation(perm_length, offset = 0):
 
 	return num_var, num_clauses, clauses
 
+def get_cnf_pt_selector(pt_alphabet_size, offset = 0):
+	code = lambda x: x + 1 + offset
+
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	# at least one selector is true
+	clauses += [[code(i) for i in range(pt_alphabet_size)] + [0]]
+	num_clauses += 1
+
+	# between every pair, at most one selector is true
+	for i in range(pt_alphabet_size):
+		for j in range(i + 1, pt_alphabet_size):
+			clauses += [[-code(i), -code(j), 0]]
+			num_clauses += 1
+
+	num_var = pt_alphabet_size
+
+	return num_var, num_clauses, clauses
+
+
 def get_cnf_permutation_product(offset1, offset2, offset3):
 	# offset1 and offset2 are for the two factor matrices
 	# offset3 is for the new permutation matrix
@@ -52,6 +74,31 @@ def get_cnf_permutation_product(offset1, offset2, offset3):
 			for k in range(perm_length):
 				clauses += [[-code1(i, k), -code2(k, j), code3(i, j), 0]]
 				num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
+def get_cnf_selector_permutation_product(selectors, offsets1, offset2, offset3):
+	# selectors is a list of codes for the selecting variables
+	# offsets1 is a list of offsets for the first factor
+	# offset2 is for the second factor matrix
+	# offset3 is for the new permutation matrix
+	# assumes all three already exist
+
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	code2 = lambda x, y: x*perm_length + y + 1 + offset2
+	code3 = lambda x, y: x*perm_length + y + 1 + offset3
+
+	# TODO
+	for n, offset1 in enumerate(offsets1):
+		code1 = lambda x, y: x*perm_length + y + 1 + offset1  
+		for i in range(perm_length):
+			for j in range(perm_length):
+				for k in range(perm_length):
+					clauses += [[-(selectors[n] + 1), -code1(i, k), -code2(k, j), code3(i, j), 0]]
+					num_clauses += 1
 
 	return num_var, num_clauses, clauses
 
@@ -142,6 +189,16 @@ ct_alphabet = "ABCDEF"
 #pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
 #ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+# if set to true, this will intentionally corrupt the plain text, probably resulting in UNSAT
+corrupt_pt = (False, "b" + pt[1:])
+
+# if True:  Use the ct and pt to attempt to reconstruct a permutation table
+#           Then check if permutation table reproduces the ct from the pt
+# if False: Use the ct to attempt to reconstruct a pt - permutation table pair
+#           Then check if the reconstructed pt and the reconstructed permutation table reproduce the ct
+#           Then compare reconstructed pt and original pt
+use_known_pt = False
+
 permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
 print(f"{pt = }")
 pt_array = dc.str_to_array(pt, pt_alphabet)
@@ -151,6 +208,11 @@ print(f"{ct = }")
 roundtrip_array = dc.decrypt(ct_array, permutation_table)
 roundtrip = dc.array_to_str(roundtrip_array, pt_alphabet)
 assert roundtrip == pt, "Something went horribly wrong and the message couldn't be decrypted correctly!"
+
+# corrupt plain text, if desired, probably resulting in UNSAT
+if corrupt_pt[0]:
+	pt = corrupt_pt[1]
+	pt_array = dc.str_to_array(pt, pt_alphabet)
 
 pt_alphabet_size = len(pt_alphabet)
 ct_alphabet_size = len(ct_alphabet)
@@ -176,6 +238,8 @@ for i in range(pt_alphabet_size):
 	num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 	permutations += [{"type": "perm_matrix", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
+pt_letter_permutation_matrix_offsets = perm_matrix_offsets()
+
 # create the deck
 num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
@@ -189,15 +253,30 @@ for i in range(pt_length):
 num_var, num_clauses, clauses = get_cnf_permutation_as_identity(offset = perm_matrix_offset(pt_alphabet_size))
 permutations += [{"type": "constraint_identity_matrix", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
-# NOTE: This step REQUIRES the plain text to be known
-# If it is possible to say "it must be one of the perm_matrices that does it, one of them does but idk which one" instead of the one at pt_letter, then it would not depend on the plain text
-#
-# constrain the deck states sequentially as permutation x old_deck = new_deck
-for i in range(pt_length):
-	pt_letter = pt_array[i]
+if use_known_pt:
+	# NOTE: This step REQUIRES the plain text to be known
+	# If it is possible to say "it must be one of the perm_matrices that does it, one of them does but idk which one" instead of the one at pt_letter, then it would not depend on the plain text
+	#
+	# constrain the deck states sequentially as permutation x old_deck = new_deck
+	for i in range(pt_length):
+		pt_letter = pt_array[i]
 
-	num_var, num_clauses, clauses = get_cnf_permutation_product(offset1 = perm_matrix_offset(pt_letter), offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
-	permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+		num_var, num_clauses, clauses = get_cnf_permutation_product(offset1 = perm_matrix_offset(pt_letter), offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
+		permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+else:
+	# If we do not wish to use the plain text, we need to create an array to hold the reconstructed pt
+	selector_offsets = []
+	for i in range(pt_length):
+		num_var, num_clauses, clauses = get_cnf_pt_selector(pt_alphabet_size, offset = total_var())
+		selector_offsets += [total_var()]
+		permutations += [{"type": "pt_selector", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
+	for i in range(pt_length):
+		num_var, num_clauses, clauses = get_cnf_selector_permutation_product(selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
+		permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+
 
 # constrain the cipher text
 for i in range(pt_length):
@@ -238,8 +317,11 @@ print(expression)
 
 if result == "SATISFIABLE":
 	permutation_table_reconstructed = np.empty((pt_alphabet_size, ct_alphabet_size), dtype = int)
+	selection_matrix = np.empty((pt_length, pt_alphabet_size), dtype = int)
 
 	code_to_pos = lambda v, offset: ((v-1-offset)//perm_length, (v-1-offset)%perm_length)
+	selector_code_to_pos = lambda v, offset: ((v-1-offset)//pt_alphabet_size, (v-1-offset)%pt_alphabet_size)
+
 	for i, p in enumerate(permutations):
 		if p["type"].startswith("perm_matrix"):		
 			permutation_matrix = np.empty((perm_length, perm_length), dtype = int)
@@ -253,26 +335,53 @@ if result == "SATISFIABLE":
 			if p["type"] == "perm_matrix":
 				permutation_table_reconstructed[i] = permutation
 
+		#elif p["type"] == "pt_selector":		
+		#	#selector_offsets
+		#	for n in expression.strip().split(" "):
+		#		#if (m := int(n)) != 0 and abs(m) >= selector_offsets[0] and abs(m) < (selector_offsets[-1] + pt_alphabet_size):
+		#		if (m := int(n)) != 0 and abs(m) >= p["offset"] and abs(m) < (p["offset"] + pt_alphabet_size):
+		#			selection_matrix[selector_code_to_pos(abs(m), selector_offsets[0])] = np.sign(m)
+
+	if not use_known_pt:
+		for n in expression.strip().split(" "):
+			if (m := int(n)) != 0 and abs(m) >= selector_offsets[0] and abs(m) <= (selector_offsets[-1] + pt_alphabet_size):	
+				selection_matrix[selector_code_to_pos(abs(m), selector_offsets[0])] = np.sign(m)
+
+
 	print("Reconstructed permutation table:")
 	print(permutation_table_reconstructed)
 	print("Original permutation table:")
 	print(permutation_table)
 
-	pt_array_from_reconstructed_permutation_table = dc.decrypt(ct_array, permutation_table_reconstructed)
-	pt_from_reconstructed_permutation_table = dc.array_to_str(pt_array_from_reconstructed_permutation_table, pt_alphabet)
+	if use_known_pt:
+		pt_array_from_reconstructed_permutation_table = dc.decrypt(ct_array, permutation_table_reconstructed)
+		pt_from_reconstructed_permutation_table = dc.array_to_str(pt_array_from_reconstructed_permutation_table, pt_alphabet)
 
-	print("Decrypting ct with reconstructed permutation table:")
-	print(f"{pt_from_reconstructed_permutation_table = }")
+		# we need to use the original pt to check the permutation table
+		print("Decrypting ct with reconstructed permutation table:")
+		print(f"{pt_from_reconstructed_permutation_table = }")
 
-	print(f"Correct decryption: {pt_from_reconstructed_permutation_table == pt}")
+		print(f"Correct decryption: {pt_from_reconstructed_permutation_table == pt}")
+	else:
+		# we need to use the reconstructed pt and the reconstructed permutation table to check
+		reconstructed_pt = ""
+		for row in selection_matrix:
+			reconstructed_pt += pt_alphabet[np.nonzero(row == 1)[0][0]]
+
+		print(f"{pt               = }")
+		print(f"{reconstructed_pt = }")
+		reconstructed_pt_array = dc.str_to_array(reconstructed_pt, pt_alphabet)
+		reconstructed_ct_array = dc.encrypt(reconstructed_pt_array, permutation_table_reconstructed)
+		reconstructed_ct = dc.array_to_str(reconstructed_ct_array, ct_alphabet)
+		print(f"{ct               = }")
+		print(f"{reconstructed_ct = }")
+
+		print(f"Correct ct reproduction: {ct == reconstructed_ct}")
+		print("-"*10)
+
+		print(f"pt isomorph code               = '{dc.get_isomorph_code(pt)}'")
+		print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
+		print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(pt) == dc.get_isomorph_code(reconstructed_pt)}")
 
 
-	# [[4 0 1 3 2 5]
-	#  [1 2 0 3 4 5]
-	#  [2 0 5 4 1 3]
-	#  [5 4 2 1 3 0]]
 
-	# [4, 5, 3, 2, 1, 0]
-	# [5, 4, 3, 0, 2, 1]
-	# [3, 5, 4, 2, 1, 0]
-	# [2, 4, 1, 5, 3, 0]
