@@ -29,3 +29,29 @@ The shuffling of the deck changes accordingly: if $\mathbf{T}_{ij} = 1$, then $\
 
 (Hopefully there werent any mistakes in that description.)
 
+## Math details
+Since kissat accepts input in CNF (conjunctive normal form), the constraints are encoded as such.
+
+### Permutation matrices
+In order to encode a permutation matrix, $n \time n$ variables are generated. Then for the row $k$ the condition $\bigvee _i a _{ik}$ ensures at least one variable is true per row. The relation
+$\bigwedge _i \bigwedge _{j > i} \neg a _{ik} \vee \neg a _{jk}$ ensurses for row $k$ that at most one element can be true (because every possible pair must have at least one false element). The same is done for each column. In the end this results in $n^2$ variables and $n(n+1)$ conditions.
+
+For our case, $n$ is the length of the cipher text alphabet or equivalently the deck size. We need one matrix per letter in the plain text alphabet, one for the inital deck and then for each letter of plain text another deck state, giving $(\mathrm{pt\_alphabet} + \mathrm{pt\_size} + 1) \cdot n^2$ variables and $(\mathrm{pt\_alphabet} + \mathrm{pt\_size} + 1) \cdot n(n+1)$ conditions.
+
+### Permuting the deck (without selectors)
+Since permuting the deck is basically matrix multiplication, we can use a matrix multiplication algorithm. However, it is possible to cut down on conditions by using the fact we are dealing with permutation matrices. For the product $\mathbf{A} \mathbf{B} = \mathbf{C}$ where each is a permutation matrix (in our case one permutation matrix acting on the state of the deck), we need $\bigwedge _{i, j, k} \neq a _{ik} \vee \neq b _{kj} \vee c _{ij}$ giving $n^3$ conditions per multiplication.
+
+Because we need one multiplication per letter in the plain text, this results in an additional $\mathrm{pt\_size} \cdot n^3$ with $n$ as the length of the cipher text alphabet.
+
+### Permuting the deck (with selectors)
+If the plain text is not known, we need to introduce another matrix to hold the options for the plain text.
+
+This is basically a matrix of size pt times pt_alphabet, and we impose constraints as for permutation matrices, but only for the rows, which encodes the fact that each true entry in this matrix corresponds to a choice for one plaintext letter.
+
+The multiplication is then modified to $\bigwedge _{i, j, k, z} \neq s _z \vee \neq a _{ik} (z) \vee \neq b _{kj} \vee c _{ij}$ with $a(z)$ being an element in one specific permutation matrix for the plain text letters. (This works because every selector variable that is set to False will, due to being negated, will trivially satisfy that specific condition and essentially make it drop out. Only one clause will remain, the chosen one).
+
+The new variables added amount to $\mathrm{pt\_size} \cdot \mathrm{pt\_alphabet}$ and the clauses scale with $\mathrm{pt\_alphabet} \cdot n^3$.
+
+### Everything else
+Everything else is just setting specific variables to True or False, which scales much slower than everything else and does not incur additional variables, so I am not going to bother calculating it.
+
