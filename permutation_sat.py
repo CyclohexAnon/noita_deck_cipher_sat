@@ -129,6 +129,17 @@ def get_cnf_ct_permutation_equality(index, offset):
 
 	return num_var, num_clauses, clauses
 
+def get_cnf_equality(index, val = True):
+	# set the variable at index to val
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	clauses += [[index * int((int(val)-0.5)*2), 0]]
+	num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
 def get_cnf_unique_top_card(offsets):
 	# constrain the permutation matrices at offsets such that the top row is different
 	# offsets is list of offsets
@@ -199,6 +210,10 @@ corrupt_pt = (False, "b" + pt[1:])
 #           Then compare reconstructed pt and original pt
 use_known_pt = False
 
+# If use_known_pt is false, this will be used to input cribs
+# can be empty list
+cribs = [{"pos" : 4, "val" : "abcd"}]
+
 permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
 print(f"{pt = }")
 pt_array = dc.str_to_array(pt, pt_alphabet)
@@ -219,6 +234,12 @@ ct_alphabet_size = len(ct_alphabet)
 pt_length = len(pt)
 perm_length = ct_alphabet_size
 permutations = []
+
+# -1 implies unknown
+crib_array = [-1 for i in range(pt_length)]
+for d in cribs:
+	for i in range(len(d["val"])):
+		crib_array[d["pos"] + i] = pt_alphabet.index(d["val"][i])
 
 # explanation about the term offset: the variables count up in order with every new addition, therefore later permutation matrices must be "offset" to account for the already used variables
 
@@ -275,6 +296,12 @@ else:
 	for i in range(pt_length):
 		num_var, num_clauses, clauses = get_cnf_selector_permutation_product(selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
 		permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	# process cribs
+	for i, crib in enumerate(crib_array):
+		if crib == -1: continue
+		num_var, num_clauses, clauses = get_cnf_equality(selector_offsets[i] + crib + 1)
+		permutations += [{"type": "constraint_crib", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 
 
