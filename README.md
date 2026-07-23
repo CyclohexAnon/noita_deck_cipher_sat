@@ -7,7 +7,7 @@ The modules used are `numpy` and `subprocess`. The code is tested under Linux on
 Also note that the fantastic SAT solver [kissat](https://github.com/arminbiere/kissat) is doing most of the heavy lifting here. Please adjust the paths in `run_kissat_permutation.sh` to your liking. The `-v` option is optional, but may be worth using for long runs to make sure the calculation is, in fact, still running.
 
 ## Some explanations
-The deck cipher mechanism is explained by Lymm's wiki. (insert link here later) To encode the mechanism as a SAT problem, the following steps are used:
+The deck cipher mechanism is explained by [Lymm's wiki](https://github.com/Lymm37/eye-messages/wiki/Group-Autokey-%28GAK%29). To encode the mechanism as a SAT problem, the following steps are used:
 
 For each possible plain text letter, generate a permutation matrix $\mathbf{P}(i) \in \mathbb{B}^{\mathrm{ct\_alphabet} \times \mathrm{ct\_alphabet}}$ corresponding to the assigned shuffling of the deck.
 
