@@ -102,6 +102,37 @@ def get_isomorph_code(string):
 
 	return isomorph_pattern
 
+def get_firstfree_isomorph_code(string, special_letter = "A"):
+	# isomorph pattern is like A..BC.ACB where dots are nonrepeated letters and A, B, C, etc. are repeated letters
+	# except treat the first letter in a special way
+	chardict = {}
+	charcount = {}
+	placeholder = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	isomorph_pattern = ""
+
+	# count letters
+	for c in string:
+		if c in charcount:
+			charcount[c] += 1
+		else:
+			charcount[c] = 1
+
+	k = 1
+	for c in string:
+		if c == special_letter:
+			isomorph_pattern += placeholder[0]
+			continue
+
+		if charcount[c] == 1: # letter occurs only once, thus it cannot be repeated
+			isomorph_pattern += "."
+		else:
+			if c not in chardict: # create a unique lookup for that letter if it doesnt exist yet
+				chardict[c] = placeholder[k]
+				k += 1
+			isomorph_pattern += chardict[c]
+
+	return isomorph_pattern
+
 def get_all_isomorphs(string, isomorph_length):
 	isomorphs = {}
 
