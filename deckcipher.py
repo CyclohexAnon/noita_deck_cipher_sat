@@ -23,17 +23,18 @@ def get_permutation_table(ct_deck_size, pt_deck_size, seed = None, double_free =
 		permutation_table[i] = np.roll(permutation_table[i], -k) # bring unique element to front by rolling array
 	return permutation_table
 
-def encrypt(pt_array, permutation_table):
+def encrypt(pt_array, permutation_table, return_deck = False):
 	'''
 	Encrypt a plain text array using a permutation table. The initial state of the deck is assumed to be sorted.
 	'''
 	ct_deck_size = permutation_table.shape[1]
 	deck = np.arange(ct_deck_size) # initialize deck
-	ct = np.empty(pt_array.shape, dtype = int)
+	ct_array = np.empty(pt_array.shape, dtype = int)
 	for i, k in enumerate(pt_array):
 		deck = deck[permutation_table[k]] # permute the deck by the plain text letter
-		ct[i] = deck[0] # top card is cipher text
-	return ct
+		ct_array[i] = deck[0] # top card is cipher text
+	if return_deck: return ct_array, deck
+	return ct_array
 
 def decrypt(ct_array, permutation_table):
 	'''
@@ -41,12 +42,12 @@ def decrypt(ct_array, permutation_table):
 	'''
 	ct_deck_size = permutation_table.shape[1]
 	deck = np.arange(ct_deck_size) # initialize deck
-	pt = np.empty(ct_array.shape, dtype = int)
+	pt_array = np.empty(ct_array.shape, dtype = int)
 	for i, k in enumerate(ct_array):
 		ct_index = np.nonzero(deck == k)[0][0] # find cipher text letter in deck
-		pt[i] = np.nonzero(permutation_table[:, 0] == ct_index)[0][0] # find row that brings that letter to the front, which is the plain text letter
-		deck = deck[permutation_table[pt[i]]] # permute the deck accordingly
-	return pt
+		pt_array[i] = np.nonzero(permutation_table[:, 0] == ct_index)[0][0] # find row that brings that letter to the front, which is the plain text letter
+		deck = deck[permutation_table[pt_array[i]]] # permute the deck accordingly
+	return pt_array
 
 def str_to_array(string, alphabet):
 	'''

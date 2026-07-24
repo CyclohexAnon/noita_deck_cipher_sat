@@ -451,24 +451,26 @@ def generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True,
 
 	return ct, permutation_table
 
-if __name__ == "__main__":
+def fun1_reconstruct_pt():
+	# Try to reconstruct some plaintext and permutation table from some ciphertext
+	pt = "aaaaaaaaa"
+	pt_alphabet = "ab"
+	ct_alphabet = "ABCD"
+	ct, permutation_table = generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True)
+	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, cribs = [], debug = True)
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, **result)
 
-	#pt = "aaaaaaaaa"
-	#pt_alphabet = "ab"
-	#ct_alphabet = "ABCD"
-	#ct, permutation_table = generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True)
-	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, cribs = [], debug = True)
-	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, **result)
-	
+def fun2_calculate_reachable_and_unreachable_ct():
+	# calculate the number of reachable and unreachable ciphertexts for some pt_alphabet and ct_alphabet as well as 
 	result_dict = {}
 	l_stats = {}
 
-	pt_alphabet = "abc"
+	pt_alphabet = "ab"
 	ct_alphabet = "ABCD"
 
 	unsat_prefixes = []
 
-	for max_ct_len in range(1, 13):
+	for max_ct_len in range(1, 5):
 		l_stats[max_ct_len] = {True: 0, False: 0}
 		m = len(ct_alphabet)**max_ct_len
 		for i in range(m):
@@ -514,41 +516,33 @@ if __name__ == "__main__":
 	#print(result_dict)
 	print(l_stats)
 
+if __name__ == "__main__":
+	#fun1_reconstruct_pt()
+	#fun2_calculate_reachable_and_unreachable_ct()
+	
+	# adversarial ct generation
 
+	pt_alphabet = "abcde"
+	ct_alphabet = "ABCDEFG"
 
-	# for pt_alphabet = "ab", ct_alphabet = "ABCD"
-	# double-free
-	# {1: {True: 3, False: 0}, 2: {True: 9, False: 0}, 3: {True: 27, False: 0}, 4: {True: 81, False: 0}, 5: {True: 243, False: 0}, 6: {True: 729, False: 0}, 7: {True: 2187, False: 0}, 8: {True: 6273, False: 288}, 9: {True: 16707, False: 2976}, 10: {True: 41175, False: 17874}, 11: {True: 96027, False: 81120}}
+	min_length = 1e10
+	for j in range(10):
+		ct = "".join([ct_alphabet[x] for x in np.random.randint(0, len(ct_alphabet), size = 2)]) # low(incl.) - high(excl.)
+		max_attempt_len = 40
+		for i in range(max_attempt_len):
+			print(f"Attempted length {i}")
+			result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = False)
+			if not result["satisfiable"]: break
+			pt = result["reconstructed_pt"]
+			permutation_table = result["permutation_table_reconstructed"]
+			ct_array, deck = dc.encrypt(dc.str_to_array(pt, pt_alphabet), permutation_table, return_deck = True)
+			for k in range(len(ct_alphabet)):
+				if k not in permutation_table[:,0]:
+					ct += ct_alphabet[deck[k]]
+					break
+		min_length = min(len(ct), min_length)
+		print(len(ct)-1)
+		#print(f"estimated longest guaranteed valid ct for pt_alphabet_size = {len(pt_alphabet)} and ct_alphabet_size = {len(ct_alphabet)} (found unsat example '{ct}'):\n{len(ct)-1}")
+	print(f"L_0({len(pt_alphabet)},{len(ct_alphabet)}) ≤ {min_length-1}")
 
-
-	# for pt_alphabet = "ab", ct_alphabet = "ABC"
-	# not double-free
-	# {1: {True: 3, False: 0}, 2: {True: 9, False: 0}, 3: {True: 27, False: 0}, 4: {True: 73, False: 8}, 5: {True: 171, False: 72}, 6: {True: 393, False: 336}, 7: {True: 855, False: 1332}, 8: {True: 1841, False: 4720}, 9: {True: 3863, False: 15820}, 10: {True: 8053, False: 50996}, 11: {True: 16567, False: 160580}, 12: {True: 33941, False: 497500}}
-
-	# for pt_alphabet = "ab", ct_alphabet = "ABCD"
-	# not double-free
-	# {1: {True: 4, False: 0}, 2: {True: 16, False: 0}, 3: {True: 64, False: 0}, 4: {True: 232, False: 24}, 5: {True: 736, False: 288}, 6: {True: 2200, False: 1896}, 7: {True: 6220, False: 10164}, 8: {True: 16594, False: 48942}, 9: {True: 41638, False: 220506}, 10: {True: 98998, False: 949578}}
-
-	# for pt_alphabet = "ab", ct_alphabet = "ABCDE"
-	# not double-free
-	# {1: {True: 5, False: 0}, 2: {True: 25, False: 0}, 3: {True: 125, False: 0}, 4: {True: 577, False: 48}, 5: {True: 2357, False: 768}, 6: {True: 9145, False: 6480}, 7: {True: 33701, False: 44424}, 8: {True: 121729, False: 268896}, 9: {True: 413717, False: 1539408}}
-
-	# for pt_alphabet = "ab", ct_alphabet = "ABCDEF"
-	# not double-free
-	# {1: {True: 6, False: 0}, 2: {True: 36, False: 0}, 3: {True: 216, False: 0}, 4: {True: 1216, False: 80}, 5: {True: 6176, False: 1600}, 6: {True: 29956, False: 16700}, 7: {True: 137996, False: 141940}, 8: {True: 628616, False: 1051000}}
-
-	# pt_alphabet = "ab", ct_alphabet = "ABCDEFG"
-	# not double-free
-	# {1: {True: 7, False: 0}, 2: {True: 49, False: 0}, 3: {True: 343, False: 0}, 4: {True: 2281, False: 120}, 5: {True: 13927, False: 2880}, 6: {True: 81709, False: 35940}, 7: {True: 456403, False: 367140}, 8: {True: 2523661, False: 3241140}}
-
-	# for pt_alphabet = "abc", ct_alphabet = "ABCD"
-	# not double-free
-	# {1: {True: 4, False: 0}, 2: {True: 16, False: 0}, 3: {True: 64, False: 0}, 4: {True: 256, False: 0}, 5: {True: 1024, False: 0}, 6: {True: 4096, False: 0}, 7: {True: 16384, False: 0}, 8: {True: 65536, False: 0}, 9: {True: 261568, False: 576}}
-
-	# for pt_alphabet = "abc", ct_alphabet = "ABCDE"
-	# not double-free
-	# {1: {True: 5, False: 0}, 2: {True: 25, False: 0}, 3: {True: 125, False: 0}, 4: {True: 625, False: 0}, 5: {True: 3125, False: 0}, 6: {True: 15625, False: 0}, 7: {True: 78125, False: 0}, 8: {True: 390625, False: 0}, 9: {True: 1951829, False: 1296}}
-
-	# for pt_alphabet = "abc", ct_alphabet = "ABCDEF"
-	# not double-free
-	# {1: {True: 6, False: 0}, 2: {True: 36, False: 0}, 3: {True: 216, False: 0}, 4: {True: 1296, False: 0}, 5: {True: 7776, False: 0}, 6: {True: 46656, False: 0}, 7: {True: 279936, False: 0}, 8: {True: 1679616, False: 0}}
+	
