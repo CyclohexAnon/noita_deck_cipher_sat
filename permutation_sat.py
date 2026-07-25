@@ -426,7 +426,7 @@ def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permut
 		reconstructed_ct_array = dc.encrypt(reconstructed_pt_array, permutation_table_reconstructed)
 		reconstructed_ct = dc.array_to_str(reconstructed_ct_array, ct_alphabet)
 
-		print(f"{pt               = }")
+		if pt is not None: print(f"{pt               = }")
 		print(f"{reconstructed_pt = }")
 		print(f"{ct               = }")
 		print(f"{reconstructed_ct = }")
@@ -434,9 +434,9 @@ def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permut
 		print(f"Correct ct reproduction: {ct == reconstructed_ct}")
 		print("-"*10)
 
-		print(f"pt isomorph code               = '{dc.get_isomorph_code(pt)}'")
-		print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
-		print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(pt) == dc.get_isomorph_code(reconstructed_pt)}")
+		if pt is not None: print(f"pt isomorph code               = '{dc.get_isomorph_code(pt)}'")
+		if pt is not None: print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
+		if pt is not None: print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(pt) == dc.get_isomorph_code(reconstructed_pt)}")
 
 def generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True):
 	permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
@@ -465,12 +465,12 @@ def fun2_calculate_reachable_and_unreachable_ct():
 	result_dict = {}
 	l_stats = {}
 
-	pt_alphabet = "ab"
-	ct_alphabet = "ABCD"
+	pt_alphabet = "abcd"
+	ct_alphabet = "ABCDE"
 
 	unsat_prefixes = []
 
-	for max_ct_len in range(1, 5):
+	for max_ct_len in range(1, 11):
 		l_stats[max_ct_len] = {True: 0, False: 0}
 		m = len(ct_alphabet)**max_ct_len
 		for i in range(m):
@@ -516,19 +516,19 @@ def fun2_calculate_reachable_and_unreachable_ct():
 	#print(result_dict)
 	print(l_stats)
 
-if __name__ == "__main__":
-	#fun1_reconstruct_pt()
-	#fun2_calculate_reachable_and_unreachable_ct()
-	
+
+def fun3_adversarial_ct_generation():
 	# adversarial ct generation
 
-	pt_alphabet = "abcde"
-	ct_alphabet = "ABCDEFG"
+	pt_alphabet = "abcd"
+	ct_alphabet = "ABCDE"
 
-	min_length = 1e10
-	for j in range(10):
-		ct = "".join([ct_alphabet[x] for x in np.random.randint(0, len(ct_alphabet), size = 2)]) # low(incl.) - high(excl.)
-		max_attempt_len = 40
+	min_length = None
+	min_ct = None
+	for j in range(1):
+		#ct = "".join([ct_alphabet[x] for x in np.random.randint(0, len(ct_alphabet), size = 2)]) # low(incl.) - high(excl.)
+		ct = "A"
+		max_attempt_len = 100
 		for i in range(max_attempt_len):
 			print(f"Attempted length {i}")
 			result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = False)
@@ -540,9 +540,96 @@ if __name__ == "__main__":
 				if k not in permutation_table[:,0]:
 					ct += ct_alphabet[deck[k]]
 					break
-		min_length = min(len(ct), min_length)
+		if min_length is None or min_length > len(ct):
+			min_length = len(ct)
+			min_ct = ct
 		print(len(ct)-1)
 		#print(f"estimated longest guaranteed valid ct for pt_alphabet_size = {len(pt_alphabet)} and ct_alphabet_size = {len(ct_alphabet)} (found unsat example '{ct}'):\n{len(ct)-1}")
 	print(f"L_0({len(pt_alphabet)},{len(ct_alphabet)}) ≤ {min_length-1}")
+	print(ct)
 
-	
+def fun4_does_lzero_depend_on_ct_alphabet_size():
+	# calculate the number of reachable and unreachable ciphertexts for some pt_alphabet and ct_alphabet as well as 
+	result_dict = {}
+	l_stats = {}
+
+	pt_alphabet       = "abc"
+	ct_alphabet_small = "ABCD"
+	ct_alphabet       = "ABCDE"
+
+	unsat_prefixes = []
+
+	break_outer_loop = False
+	for max_ct_len in range(1, 10):
+		l_stats[max_ct_len] = {True: 0, False: 0}
+		m = len(ct_alphabet_small)**max_ct_len
+		for i in range(m):
+			ct = ""
+			k = i
+			for j in range(max_ct_len):
+				r = k%len(ct_alphabet_small)
+				ct = ct_alphabet_small[r] + ct
+				k = k//len(ct_alphabet_small)
+			if max_ct_len > 2 and i%(m>>3) == 0: print(ct)
+
+			#contains_doubles = False
+			#for j, c in enumerate(ct):
+			#	if j == 0: continue
+			#	if c == ct[j-1]: contains_doubles = True; break
+			#if contains_doubles: continue # we want to look for things without doubles
+			#if ct[0] == ct_alphabet[0]: continue # if the first letter is the special letter, that implies a permutation starting with 0, which would allow doubles
+
+			found = False
+			isocode = dc.get_firstfree_isomorph_code(ct, special_letter = ct_alphabet[0])
+			for c in unsat_prefixes:
+				if isocode.startswith(c):
+					# if the ct starts with an unsat prefix, everything we append will not make it sat again
+					# so we dont need to calculate it
+					result_dict[ct] = False
+					l_stats[max_ct_len][False] += 1
+					found = True
+					break
+			if found: continue
+			if isocode in result_dict:
+				l_stats[max_ct_len][result_dict[isocode]] += 1
+				continue
+
+			result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = False)
+			result_dict[isocode] = result["satisfiable"]
+			l_stats[max_ct_len][result["satisfiable"]] += 1
+
+			if not result["satisfiable"]:
+				unsat_prefixes += [isocode]
+
+			distinct_letters_in_ct = 0
+			l = []
+			for c in ct:
+				if c not in l:
+					l += [c]
+					distinct_letters_in_ct += 1
+
+			if distinct_letters_in_ct == len(ct_alphabet_small) and not result["satisfiable"]:
+				print(f"UNSAT ct found with {distinct_letters_in_ct} symbols, {ct = }")
+				break_outer_loop = True
+				break
+		if break_outer_loop: break
+
+		#print(l_stats)
+
+	#print("Finish")
+	#print(result_dict)
+	#print(l_stats)
+
+
+
+if __name__ == "__main__":
+	#fun1_reconstruct_pt()
+	fun2_calculate_reachable_and_unreachable_ct()
+	#fun3_adversarial_ct_generation()
+	#fun4_does_lzero_depend_on_ct_alphabet_size()
+
+	#pt_alphabet = "abcd"
+	#ct_alphabet = "ABCDEFG"
+	#ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
+	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True)
+	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
