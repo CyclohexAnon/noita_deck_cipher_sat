@@ -55,3 +55,116 @@ The new variables added amount to $\mathrm{pt\_size} \cdot \mathrm{pt\_alphabet}
 ### Everything else
 Everything else is just setting specific variables to True or False, which scales much slower than everything else and does not incur additional variables, so I am not going to bother calculating it.
 
+
+## Some results and experimental observations
+### Shortest orphan ciphertexts
+For some combination of pt alphabet sizes and cipher text alphabets, there exist combinations of ciphertext symbols for which there is no plaintext/permutation table combination that produces them. In other words, some ciphertexts are unreachable. I call these orphan cipher texts (they have no parents).
+
+Unless we explicitely disallow double letters as we would for the eyes, short enough cipher texts are never orphans. There exists a minimum length of cipher text before it is possible for it to be an orphan, below it all cipher texts have some plain text/permutation table combination that produces them.
+
+Unfortunately the number of ciphertexts grows exponentially with the length of the cipher text, and the minimum orphan length also seems to grow fast with the size of the plain text alphabet, so I was only able to exhaustively calculate it for small sizes.
+
+For a plain text alphabet of size 2 below the (reachable cipher texts, unreachable cipher texts).
+
+| Length | cta = 3        | cta = 4         | cta = 5          | cta = 6          | cta = 7           |
+| ------ | -------------- | --------------- | ---------------- | ---------------- | ----------------- |
+| 1      | (3,0)          | (4,0)           | (5,0)            | (6,0)            | (7,0)             |
+| 2      | (9,0)          | (16,0)          | (25,0)           | (36,0)           | (49,0)            |
+| 3      | (27,0)         | (64,0)          | (125,0)          | (216,0)          | (343,0)           |
+| 4      | (73,8)         | (232,24)        | (577,48)         | (1216,80)        | (2281,120)        |
+| 5      | (171,72)       | (736,288)       | (2357,768)       | (6176,1600)      | (13927,2880)      |
+| 6      | (393,336)      | (2200,1896)     | (9145,6480)      | (29956,16700)    | (81709,35940)     |
+| 7      | (855,1332)     | (6220,10164)    | (33701,44424)    | (137996,141940)  | (456403,367140)   |
+| 8      | (1841,4720)    | (16594,48942)   | (121729,268896)  | (628616,1051000) | (2523661,3241140) |
+| 9      | (3863,15820)   | (41638,220506)  | (413717,1539408) |                  |                   |
+| 10     | (8053,50996)   | (98998,949578)  |                  |                  |                   |
+| 11     | (16567,160580) |                 |                  |                  |                   |
+| 12     | (33941,497500) |                 |                  |                  |                   |
+
+For a plain text alphabet of size 3:
+
+| Length | cta = 4        | cta = 5        | cta = 6         |
+| ------ | -------------- | -------------- | --------------- |
+| 1      | (4,0)          | (5,0)          | (6,0)           |
+| 2      | (16,0)         | (25,0)         | (36,0)          |
+| 3      | (64,0)         | (125,0)        | (216,0)         |
+| 4      | (256,0)        | (625,0)        | (1296,0)        |
+| 5      | (1024,0)       | (3125,0)       | (7776,0)        |
+| 6      | (4096,0)       | (15625,0)      | (46656,0)       |
+| 7      | (16384,0)      | (78125,0)      | (279936,0)      |
+| 8      | (65536,0)      | (390625,0)     | (1679616,0)     |
+| 9      | (261568,576)   | (1951829,1296) | (10074816,2880) |
+| 10     | (1039816,8760) |                |                 |
+
+From these small experiments it seems as though eventually, by increasing the length by 1, the number of reachable ciphertexts grow with the pt alphabet size and the unreachable ciphertexts grow with the size of the ct alphabet. This would mean eventually, almost all ciphertexts are unreachable.
+
+The shortest orphan cipher text seems to grow only by the size of the plain text alphabet size, not by the cipher text alphabet from this sample. However, this may be incorrect.
+
+If, given some pt alphabet size and ct alphabet size, and some orphan cipher text, does increasing the cipher text alphabet eventually make it reachable? For pt alphabet sizes of 2 and 3 the answer seems to be no, but in general this is not true. Here is a concrete counter example:
+
+Consider the ct `AEBACDCADAEDEBEDEACBDACDBABCABCBC` with a pt alphabet size of 4. Using a ct alphabet size of 5 and 6, this is an orphan, however, using an alphabet size of 7, it no longer is. One possible plaintext/permutation table combination is:
+
+```
+pt = "acbbbccdccbbdbdbddbcddcddccdcdccc"
+permutation_table = [[0 5 6 3 4 1 2]
+                     [6 2 3 0 5 1 4]
+                     [4 1 3 2 0 6 5]
+                     [3 5 0 2 4 6 1]]
+```
+
+It is possible to show the length of the shortest orphan ciphertext is finite when the ciphertext alphabet is at least one larger than the plaintext alphabet. The construction is like so: Create a ciphertext. Find a pt/permutation table pair that creates it. If none exist, we are done. If it does, look at the state of the deck after the last plaintext letter. Look at the permutation table. Since ct alphabet > pt alphabet, there is at least one card in the deck that cannot be reached by adding any pt letter to the found pt. Append the unreachable ct letter to the ct, and repeat. This invalidates the current permutation table, and since we can extend the ct arbitrarily long, but there are only a finite number of permutation tables, eventually we exhaust all of them. So eventually we hit an unreachable ct.
+
+This algorithm does however not, in general, find the shortest possible orphan ct.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
