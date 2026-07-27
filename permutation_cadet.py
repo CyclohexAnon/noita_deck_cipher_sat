@@ -212,56 +212,7 @@ def get_cnf_isomorph_ABA(p1, p2, permutations):
 
 ###################################
 
-def solve(ct_alphabet, ct, pt_alphabet, debug = True):
-
-	# #pt_alphabet_size = 4
-	# #ct_alphabet_size = 6
-	# #pt_array = [0, 1, 2, 3, 0, 1, 2, 3]
-	# #ct_array = [4, 0, 4, 3, 2, 3, 2, 0]
-
-	# pt = "aaaaaaaaa"
-	# pt_alphabet = "ab"
-	# ct_alphabet = "ABCD"
-
-	# #pt = "this a very secret message and this a very secret message"
-	# #pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
-	# #ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-	# # if set to true, this will intentionally corrupt the plain text, probably resulting in UNSAT
-	# corrupt_pt = (False, "b" + pt[1:])
-
-	# # if True:  Use the ct and pt to attempt to reconstruct a permutation table
-	# #           Then check if permutation table reproduces the ct from the pt
-	# # if False: Use the ct to attempt to reconstruct a pt - permutation table pair
-	# #           Then check if the reconstructed pt and the reconstructed permutation table reproduce the ct
-	# #           Then compare reconstructed pt and original pt
-	# use_known_pt = False
-
-	# # If use_known_pt is false, this will be used to input cribs
-	# # can be empty list
-	# cribs = [{"pos" : 4, "val" : "abcd"}]
-	# cribs = []
-
-	# permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
-	# print(f"{pt = }")
-	# pt_array = dc.str_to_array(pt, pt_alphabet)
-	# ct_array = dc.encrypt(pt_array, permutation_table)
-	# ct = dc.array_to_str(ct_array, ct_alphabet)
-	# print(f"{ct = }")
-	# roundtrip_array = dc.decrypt(ct_array, permutation_table)
-	# roundtrip = dc.array_to_str(roundtrip_array, pt_alphabet)
-	# assert roundtrip == pt, "Something went horribly wrong and the message couldn't be decrypted correctly!"
-
-	# #ct = "BCBDBCDAC" # orphan ciphertext for "ab" and "ABCD"
-	# #ct = "BABDBADCB" # also an orphan
-	# #ct = "BABDBADCA" # however, this is apparently not an orphan, even though it is a just a substitution of the first string (A <--> C), why? --> I think this is because A is kind of a special letter because it starts the unshuffled deck and repeating doubles is not allowed, so substitutions involving A might behave unexpectantly. Swapping for example (B <--> C) behaves in the expected way.
-	# ct = "BCBDBCDAC" 
-	# ct_array = dc.str_to_array(ct, ct_alphabet)
-
-	# # corrupt plain text, if desired, probably resulting in UNSAT
-	# if corrupt_pt[0]:
-	# 	pt = corrupt_pt[1]
-	# 	pt_array = dc.str_to_array(pt, pt_alphabet)
+def solve(ct_alphabet, ct, pt_alphabet, debug = True, use_caqe_instead = False):
 
 	#if pt is not None: pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.str_to_array(ct, ct_alphabet)
@@ -345,22 +296,37 @@ def solve(ct_alphabet, ct, pt_alphabet, debug = True):
 
 	#print(clauses)
 
-	if debug: print("Running cadet...")
-	subprocess.run(["./run_cadet_permutation.sh"])
+	if use_caqe_instead:
+		if debug: print("Running caqe...")
+		subprocess.run(["./run_caqe_permutation.sh"])
 
-	
+		if debug: print("Results:")
+		with open("permutation_test_caqe_result.txt", "r") as f:
+			lines = f.readlines()
+			result = ""
+			expression = ""
+			for line in lines:
+				if line.strip() == "c Satisfiable": result = "SAT"; break
+				if line.strip() == "c Unsatisfiable": result = "UNSAT"; break
+				if line.startswith("V"): expression += line[2:].strip()[:-1]
 
-	if debug: print("Results:")
-	with open("permutation_test_cadet_result.txt", "r") as f:
-		lines = f.readlines()
-		result = ""
-		expression = ""
-		save_next_line = False
-		for line in lines:
-			if save_next_line: expression = line[2:].strip()
-			if line.strip() == "SAT": result = "SAT"; break
-			if line.strip() == "UNSAT": result = "UNSAT"; save_next_line = True
-			if line.strip() == "UNKNOWN": result = "UNKNOWN"; break
+		expression = expression.strip()
+
+	else:
+		if debug: print("Running cadet...")
+		subprocess.run(["./run_cadet_permutation.sh"])
+
+		if debug: print("Results:")
+		with open("permutation_test_cadet_result.txt", "r") as f:
+			lines = f.readlines()
+			result = ""
+			expression = ""
+			save_next_line = False
+			for line in lines:
+				if save_next_line: expression = line[2:].strip()
+				if line.strip() == "SAT": result = "SAT"; break
+				if line.strip() == "UNSAT": result = "UNSAT"; save_next_line = True
+				if line.strip() == "UNKNOWN": result = "UNKNOWN"; break
 
 	if debug: print(result)
 	if debug: print(expression)
@@ -467,9 +433,9 @@ if __name__ == "__main__":
 	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
 
 	pt_alphabet = "abc"
-	ct_alphabet = "ABCDEFG"
-	ct = "ABAAABBAAA"
-	result = solve(ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True)
+	ct_alphabet = "ABCD"
+	ct = "ABAAAAAB"
+	result = solve(ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, use_caqe_instead = True)
 
 	if result["unsatisfiable"]:
 		print(result["orphan_ct"])
@@ -480,4 +446,8 @@ if __name__ == "__main__":
 
 	# pt = "abc"
 	# ct = "ABCDEFG"
-	# Result: UNSAT with ct = "ABACGEGEBG" ! (for one shorter length the calculation was stopped before it completed)
+	# Result: UNSAT with ct = "ABACGEGEBG" (found by cadet) or "AGAEGBFGF" (found by caqe)
+
+	# pt = "abc"
+	# ct = "ABCDEFGH"
+	# Result: UNSAT with ct = "ABABEBDGB" (found by caqe)
