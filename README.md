@@ -96,6 +96,8 @@ For a plain text alphabet of size 3:
 | 9      | (261568,576)   | (1951829,1296) | (10074816,2880) |
 | 10     | (1039816,8760) |                |                 |
 
+(For longer ct alphabets I was only able to find the following orphan examples of length 9 for cta = 7 ("AGAEGBFGF") and 8 ("ABABEBDGB"), both found with CAQE.)
+
 From these small experiments it seems as though eventually, by increasing the length by 1, the number of reachable ciphertexts grow with the pt alphabet size and the unreachable ciphertexts grow with the size of the ct alphabet. This would mean eventually, almost all ciphertexts are unreachable.
 
 The shortest orphan cipher text seems to grow only by the size of the plain text alphabet size, not by the cipher text alphabet from this sample. However, this may be incorrect.
