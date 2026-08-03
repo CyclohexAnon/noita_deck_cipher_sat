@@ -290,10 +290,10 @@ def get_cnf_set_totalizer_counter(input_vars, min_true, max_true = None):
 	clauses = []
 
 	for i, v in enumerate(input_vars):
-		if i <= min_true:
+		if i <= min_true-1:
 			clauses += [[v, 0]]
 			num_clauses += 1
-		if i > max_true:
+		if i > max_true-1:
 			clauses += [[-v, 0]]
 			num_clauses += 1
 
@@ -737,17 +737,17 @@ def fun4_does_lzero_depend_on_ct_alphabet_size():
 	#print(l_stats)
 
 def fun5_reconstruct_pt_with_limited_transpositions():
-	pt_alphabet = "abcde"
-	ct_alphabet = "ABCDEFG"
-	pt = "abaceadabebacaeddabcaee"
-	permutation_table = dc.get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = False, swaps_from_parent = 2)
+	pt_alphabet = "abcdefg"
+	ct_alphabet = "ABCDEFGH"
+	pt = "gbacggfeadabebageddfabgaeefgf"
+	permutation_table = dc.get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = False, swaps_from_parent = 8)
 	pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.encrypt(pt_array, permutation_table)
 	ct = dc.array_to_str(ct_array, ct_alphabet)
 
 	print(ct)
 
-	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = True, related_permutations_free_rows = 1)
+	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = True, related_permutations_free_rows = 2)
 	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, **result)
 
 if __name__ == "__main__":
