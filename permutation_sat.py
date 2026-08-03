@@ -185,59 +185,143 @@ def get_cnf_isomorph_ABA(p1, p2, permutations):
 
 # etc.
 
+def get_merge_cnf(l_list, r_list, s_list):
+	clauses = []
+
+	l_len = len(l_list)
+	r_len = len(r_list)
+	s_len = len(s_list)
+
+	l_code = lambda x: l_list[x]
+	r_code = lambda x: r_list[x]
+	s_code = lambda x: s_list[x]
+
+	for s in range(s_len):
+		for r in range(-1, s+1):
+			l = s-r-1
+			if r >= r_len: continue # -r{r} is always true, drop entire clause
+			if l >= l_len: continue # -l{l} is always true, drop entire clause
+			if r == -1: clauses += [[-l_code(l), s_code(s), 0]]; continue # -r{r} is always false, can be dropped
+			if l == -1: clauses += [[-r_code(r), s_code(s), 0]]; continue # -l{l} is always false, can be dropped
+			clauses += [[-l_code(l), -r_code(r), s_code(s), 0]]
+		for r in range(s+1):
+			l = s-r
+			if r >= r_len: clauses += [[l_code(l), -s_code(s), 0]]; continue # r{r} is always false, can be dropped
+			if l >= l_len: clauses += [[r_code(r), -s_code(s), 0]]; continue # l{l} is always false, can be dropped
+			clauses += [[l_code(l), r_code(r), -s_code(s), 0]]
+
+	return clauses
+
+def split_list(original_list, code, depth = None):
+	if depth is None: depth = int(np.ceil(np.log2(len(original_list))))
+
+	if len(original_list) == 1:
+		return (original_list, [])
+
+	if len(original_list) == 2:
+		list1 = original_list[:1]
+		list2 = original_list[1:]
+		list3 = list(map(lambda y: code(depth, y), original_list))
+		#print(f"sort {list1} and {list2} into {list3}")
+		clauses = get_merge_cnf(list1, list2, list3)
+		return (list3, clauses)
+
+	l = int(np.power(2, np.floor(np.log2(len(original_list)-1))))
+	list1, clauses1 = split_list(original_list[:l], code, depth - 1)
+	list2, clauses2 = split_list(original_list[l:], code, depth - 1)
+	list3 = list(map(lambda y: code(depth, y), original_list))
+	#print(f"merge {list1} and {list2} into {list3}")
+	clauses3 = get_merge_cnf(list1, list2, list3)
+	return (list3, clauses1 + clauses2 + clauses3)
+
+def get_cnf_totalizer(input_vars, offset_out):
+	num_var = 0
+	num_clauses = 0
+
+	lis = [i+1 for i in range(len(input_vars))]
+	#print(f"original list: {lis}")
+	outlist, clauses = split_list(lis, code = lambda x, y: len(lis)*x + y)
+	#print(outlist)
+	#print(clauses)
+
+	# because single values may terminate early, some variables may be missing from this
+	remaining_vars = list(range(lis[0], outlist[-1]+1))
+	for c in clauses:
+		for i in map(abs, c):
+			if i in remaining_vars:
+				remaining_vars.remove(i)
+
+	for r in remaining_vars:
+		f = lambda x: np.sign(x)*(abs(x)-1) if abs(x) >= r else x
+		outlist = list(map(f, outlist))
+		for i in range(len(clauses)):
+			clauses[i] = list(map(f, clauses[i]))
+
+	#print(outlist)
+	#print(clauses)
+
+	replacement = {0: 0}
+	for i in range(lis[0], outlist[-1]+1):
+		if i <= len(lis):
+			replacement[i] = input_vars[i-1]
+		else:
+			replacement[i] = i - len(lis) + offset_out
+			num_var += 1
+
+	f = lambda x: np.sign(x)*replacement[abs(x)]
+	outlist = list(map(f, outlist))
+	for i in range(len(clauses)):
+		clauses[i] = list(map(f, clauses[i]))
+
+	#print(outlist)
+	#print(clauses)
+
+	num_clauses = len(clauses)
+
+	return num_var, num_clauses, clauses, outlist
+
+def get_cnf_set_totalizer_counter(input_vars, min_true, max_true = None):
+	# get a list of input vars and treat them as a totalizer counter
+	# set everything below min_true to TRUE and everything above max_true to FALSE
+	if max_true is None: max_true = min_true
+
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	for i, v in enumerate(input_vars):
+		if i <= min_true:
+			clauses += [[v, 0]]
+			num_clauses += 1
+		if i > max_true:
+			clauses += [[-v, 0]]
+			num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
+def get_cnf_permutation_equality_up_to_selector(perm_length, offset1, offset2, selector_list):
+	# ...
+
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	code1 = lambda x, y: x*perm_length + y + 1 + offset1
+	code2 = lambda x, y: x*perm_length + y + 1 + offset2
+	code_selector = lambda x: selector_list[x]
+
+	for i in range(perm_length):
+		for j in range(perm_length):
+			clauses += [[code_selector(i), -code1(i, j),  code2(i, j), 0]]
+			clauses += [[code_selector(i),  code1(i, j), -code2(i, j), 0]]
+			num_clauses += 2
+
+	return num_var, num_clauses, clauses
+
+
 ###################################
 
-def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True):
-
-	# #pt_alphabet_size = 4
-	# #ct_alphabet_size = 6
-	# #pt_array = [0, 1, 2, 3, 0, 1, 2, 3]
-	# #ct_array = [4, 0, 4, 3, 2, 3, 2, 0]
-
-	# pt = "aaaaaaaaa"
-	# pt_alphabet = "ab"
-	# ct_alphabet = "ABCD"
-
-	# #pt = "this a very secret message and this a very secret message"
-	# #pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
-	# #ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-	# # if set to true, this will intentionally corrupt the plain text, probably resulting in UNSAT
-	# corrupt_pt = (False, "b" + pt[1:])
-
-	# # if True:  Use the ct and pt to attempt to reconstruct a permutation table
-	# #           Then check if permutation table reproduces the ct from the pt
-	# # if False: Use the ct to attempt to reconstruct a pt - permutation table pair
-	# #           Then check if the reconstructed pt and the reconstructed permutation table reproduce the ct
-	# #           Then compare reconstructed pt and original pt
-	# use_known_pt = False
-
-	# # If use_known_pt is false, this will be used to input cribs
-	# # can be empty list
-	# cribs = [{"pos" : 4, "val" : "abcd"}]
-	# cribs = []
-
-	# permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
-	# print(f"{pt = }")
-	# pt_array = dc.str_to_array(pt, pt_alphabet)
-	# ct_array = dc.encrypt(pt_array, permutation_table)
-	# ct = dc.array_to_str(ct_array, ct_alphabet)
-	# print(f"{ct = }")
-	# roundtrip_array = dc.decrypt(ct_array, permutation_table)
-	# roundtrip = dc.array_to_str(roundtrip_array, pt_alphabet)
-	# assert roundtrip == pt, "Something went horribly wrong and the message couldn't be decrypted correctly!"
-
-	# #ct = "BCBDBCDAC" # orphan ciphertext for "ab" and "ABCD"
-	# #ct = "BABDBADCB" # also an orphan
-	# #ct = "BABDBADCA" # however, this is apparently not an orphan, even though it is a just a substitution of the first string (A <--> C), why? --> I think this is because A is kind of a special letter because it starts the unshuffled deck and repeating doubles is not allowed, so substitutions involving A might behave unexpectantly. Swapping for example (B <--> C) behaves in the expected way.
-	# ct = "BCBDBCDAC" 
-	# ct_array = dc.str_to_array(ct, ct_alphabet)
-
-	# # corrupt plain text, if desired, probably resulting in UNSAT
-	# if corrupt_pt[0]:
-	# 	pt = corrupt_pt[1]
-	# 	pt_array = dc.str_to_array(pt, pt_alphabet)
-
+def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True, related_permutations = False, related_permutations_free_rows = 3):
 	if pt is not None: pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.str_to_array(ct, ct_alphabet)
 
@@ -319,8 +403,6 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		# If we want to disallow some plaintext, we would just set the specific variables in the selector matrix to false, or rather say not first letter or not second letter etc. such that as soon as at least one letter deviates, the condition is trivially satisfied and thus allowed.
 		# If we want to disallow some plaintext UP TO MONOALPHABETIC SUBSTITUTION (i.e. disallow that particular isomorph code), then introduce a permutation matrix (pt_alphabet_size x pt_alphabet_size) and then disallow -position x permutation matrix etc.? Maybe that works? Need to calculate it on paper.
 
-
-
 	# constrain the cipher text
 	for i in range(pt_length):
 		ct_letter = ct_array[i]
@@ -331,6 +413,38 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 	# constrain the pt permutation matrices to map to unique letters
 	num_var, num_clauses, clauses = get_cnf_unique_top_card(perm_length, offsets = perm_matrix_offsets()[:pt_alphabet_size])
 	permutations += [{"type": "constraint_unique_top_card", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	# if this option is chosen, we add additional constraints on the pt permutation matrices
+	# in short, we want to have one parent permutation that all the pt permutation matrices derive from
+	# we set some number of rows in that they at most differ
+	# so we need to add that parent permutation matrix, the row selector and what is basically a counter
+	# to count the row selector
+	# the row selector should be FALSE when the rows are forced equal and TRUE when they are free,
+	# so (s v ~a v b) ^ (s v a v ~b) for a and b corresponding entries between permutation matrices should do that
+	# (because s being TRUE trivially satisfies these and thus 'disables' the equality constraint)
+	if related_permutations:
+		# create parent permutation matrix
+		num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+		parent_permutation_offset = total_var()
+		permutations += [{"type": "perm_matrix_parent", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+		
+		for i in range(pt_alphabet_size):
+			# selectors are free variables
+			offset = total_var()
+			permutations += [{"type": "row_selectors", "offset": offset, "num_var": perm_length, "num_clauses": 0, "clauses": []}]
+
+			# add a counter to the selectors
+			row_selectors = [j+1 for j in range(offset, offset + perm_length)]
+			num_var, num_clauses, clauses, outlist = get_cnf_totalizer(row_selectors, offset_out = total_var())
+			permutations += [{"type": "row_selector_totalizer", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# set the counter (outlist) to the chosen number
+			num_var, num_clauses, clauses = get_cnf_set_totalizer_counter(outlist, min_true = related_permutations_free_rows, max_true = related_permutations_free_rows)
+			permutations += [{"type": "row_selector_constraints", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# set equality between the parent permutation matrix and the pt permutation matrix up to free row constraints
+			num_var, num_clauses, clauses = get_cnf_permutation_equality_up_to_selector(perm_length, offset1 = parent_permutation_offset, offset2 = pt_letter_permutation_matrix_offsets[i], selector_list = row_selectors)
+			permutations += [{"type": "row_selector_equality_constraints", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 
 
@@ -360,6 +474,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 
 	if result == "SATISFIABLE":
 		permutation_table_reconstructed = np.empty((pt_alphabet_size, ct_alphabet_size), dtype = int)
+		parent_permutation = None
 		selection_matrix = np.empty((pt_length, pt_alphabet_size), dtype = int)
 
 		code_to_pos = lambda v, offset: ((v-1-offset)//perm_length, (v-1-offset)%perm_length)
@@ -377,13 +492,8 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 
 				if p["type"] == "perm_matrix":
 					permutation_table_reconstructed[i] = permutation
-
-			#elif p["type"] == "pt_selector":		
-			#	#selector_offsets
-			#	for n in expression.strip().split(" "):
-			#		#if (m := int(n)) != 0 and abs(m) >= selector_offsets[0] and abs(m) < (selector_offsets[-1] + pt_alphabet_size):
-			#		if (m := int(n)) != 0 and abs(m) >= p["offset"] and abs(m) < (p["offset"] + pt_alphabet_size):
-			#			selection_matrix[selector_code_to_pos(abs(m), selector_offsets[0])] = np.sign(m)
+				elif p["type"] == "perm_matrix_parent":
+					parent_permutation = permutation		
 
 		if not use_known_pt:
 			for n in expression.strip().split(" "):
@@ -391,7 +501,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 					selection_matrix[selector_code_to_pos(abs(m), selector_offsets[0])] = np.sign(m)
 
 		if use_known_pt:
-			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed}
+			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "parent_permutation" : parent_permutation}
 
 		else:
 			# we need to use the reconstructed pt and the reconstructed permutation table to check
@@ -399,17 +509,23 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 			for row in selection_matrix:
 				reconstructed_pt += pt_alphabet[np.nonzero(row == 1)[0][0]]
 
-			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt}
+			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt, "parent_permutation" : parent_permutation}
 		
 	else:
 		# UNSATISFIABLE
 		return {"satisfiable" : False}
 
-def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, permutation_table_reconstructed = None, reconstructed_pt = None, satisfiable = None):
+def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, permutation_table_reconstructed = None, reconstructed_pt = None, satisfiable = None, parent_permutation = None):
+	if parent_permutation is not None:
+		print("Parent permutation:")
+		print(np.array(parent_permutation))
 	print("Reconstructed permutation table:")
 	print(permutation_table_reconstructed)
 	print("Original permutation table (if given):")
 	print(permutation_table)
+
+	if satisfiable == False:
+		return
 
 	if use_known_pt:
 		pt_array_from_reconstructed_permutation_table = dc.decrypt(ct_array, permutation_table_reconstructed)
@@ -620,16 +736,31 @@ def fun4_does_lzero_depend_on_ct_alphabet_size():
 	#print(result_dict)
 	#print(l_stats)
 
+def fun5_reconstruct_pt_with_limited_transpositions():
+	pt_alphabet = "abcde"
+	ct_alphabet = "ABCDEFG"
+	pt = "abaceadabebacaeddabcaee"
+	permutation_table = dc.get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = False, swaps_from_parent = 2)
+	pt_array = dc.str_to_array(pt, pt_alphabet)
+	ct_array = dc.encrypt(pt_array, permutation_table)
+	ct = dc.array_to_str(ct_array, ct_alphabet)
 
+	print(ct)
+
+	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = True, related_permutations_free_rows = 1)
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, **result)
 
 if __name__ == "__main__":
 	#fun1_reconstruct_pt()
-	fun2_calculate_reachable_and_unreachable_ct()
+	#fun2_calculate_reachable_and_unreachable_ct()
 	#fun3_adversarial_ct_generation()
 	#fun4_does_lzero_depend_on_ct_alphabet_size()
+	fun5_reconstruct_pt_with_limited_transpositions()
 
 	#pt_alphabet = "abcd"
 	#ct_alphabet = "ABCDEFG"
 	#ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
 	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True)
 	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
+
+	

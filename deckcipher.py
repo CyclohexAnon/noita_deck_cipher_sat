@@ -152,6 +152,36 @@ def get_all_isomorphs(string, isomorph_length):
 
 	return repeated_isomorphs
 
+def get_permutation_table_with_swaps(ct_deck_size, pt_deck_size, seed = None, double_free = False, swaps_from_parent = 3):
+	# get a permutation table where one parent permutation is chosen and all other permutations are derived from it by a distinct number of transpositions
+
+	rng = np.random.default_rng(seed = seed)
+	assert pt_deck_size + int(double_free) <= ct_deck_size, "Size of cipher alphabet must be at least plaintext alphabet size."	
+	
+	parent_permutation = rng.permuted(np.arange(ct_deck_size))
+	permutation_table = np.tile(parent_permutation, (pt_deck_size, 1))
+	index_of_zero = np.nonzero(parent_permutation == 0)[0][0]
+
+	#print("parent permutation:")
+	#print(parent_permutation)
+
+	first_swap_option = list(range(1, ct_deck_size))
+	if double_free and index_of_zero != 0:
+		first_swap_option.remove(index_of_zero)
+	first_swap = rng.permuted(first_swap_option)
+
+	# do the first swaps
+	for i in range(pt_deck_size):
+		permutation_table[i, [0, first_swap[i]]] = permutation_table[i, [first_swap[i], 0]]
+
+	# at this point we have swaps_from_parent-1 swaps remaining and we do them in permutations rows [1:]
+	for i in range(pt_deck_size):
+		swaps = rng.choice(list(range(1, ct_deck_size)), size = (swaps_from_parent-1, 2))
+		for swap in swaps:
+			permutation_table[i, swap] = permutation_table[i, swap[::-1]]
+
+	return permutation_table
+
 
 if __name__ == "__main__":
 	pt = "abcdabcd"
@@ -162,7 +192,9 @@ if __name__ == "__main__":
 	#pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
 	#ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	permutation_table = get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
+	#permutation_table = get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
+	permutation_table = get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 1, double_free = False, swaps_from_parent = 3)
+
 
 	print(f"{pt = }")
 	pt_array = str_to_array(pt, pt_alphabet)
@@ -174,9 +206,12 @@ if __name__ == "__main__":
 	print(f"{roundtrip = }")
 
 	#print(get_all_isomorphs("OLPJ3P-O3OLPJ3P-O3", 9))
-	print(get_all_isomorphs(ct, 9))
+	#print(get_all_isomorphs(ct, 9))
 
 	# next: merge overlapping isomorphs, trim "." beginning and end, try different lengths?
 
 	print(ct_array)
+	print(permutation_table)
+
+	permutation_table = get_permutation_table_with_swaps(10, 3, seed = 1, double_free = False, swaps_from_parent = 1)
 	print(permutation_table)
