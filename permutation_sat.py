@@ -737,18 +737,40 @@ def fun4_does_lzero_depend_on_ct_alphabet_size():
 	#print(l_stats)
 
 def fun5_reconstruct_pt_with_limited_transpositions():
-	pt_alphabet = "abcdefg"
-	ct_alphabet = "ABCDEFGH"
-	pt = "gbacggfeadabebageddfabgaeefgf"
-	permutation_table = dc.get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = False, swaps_from_parent = 8)
+	pt_alphabet = "abcdefgh"
+	ct_alphabet = "ABCDEFGHIJK"
+	#pt = "gbacggfeadabebageddfabgaeefgf"
+
+	rng = np.random.default_rng(seed = 1)
+	t = rng.choice(len(pt_alphabet), size = 20)
+	pt = ""
+	for x in t:
+		pt += pt_alphabet[x]
+
+	print(pt)
+
+	#permutation_table = dc.get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = False, swaps_from_parent = 8)
+	permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = False)
 	pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.encrypt(pt_array, permutation_table)
 	ct = dc.array_to_str(ct_array, ct_alphabet)
 
 	print(ct)
 
-	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = True, related_permutations_free_rows = 2)
+	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = True, related_permutations_free_rows = 3)
 	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, **result)
+
+	# sanity check: it really is a restriction on the permutation space.
+	# for example, pt = "deghabghbcgdcgcdfeaa" --> ct = "AEDAGIBDHKBBAHJJCBJF" with pt_alphabet = "abcdefgh", ct_alphabet = "ABCDEFGHIJK" (from the permutation table below) cannot be reconstructed using only two free rows:
+	# [[ 5 10  9  8  1  4  6  7  2  0  3]
+	#  [ 2 10  3  6  0  8  4  9  7  5  1]
+	#  [ 7  9  3  5  4 10  0  8  2  1  6]
+	#  [ 0  8  6  5  4  9  7  2  3  1 10]
+	#  [ 4  7  9  3  6 10  1  2  5  8  0]
+	#  [ 1  9  5  4  6  2  3  8  7 10  0]
+	#  [ 9  3  1  2  8  7  0  5  6  4 10]
+	#  [10  7  1  6  3  5  9  2  4  8  0]]
+	# but it can be done with three free rows!
 
 if __name__ == "__main__":
 	#fun1_reconstruct_pt()
