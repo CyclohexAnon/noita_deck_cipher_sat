@@ -43,7 +43,7 @@ This means, that for a given plain text letter $\mathrm{pt}(i) = k$ the recurren
 
 If the plain text is known and should be tested, no other data structures are needed. By additional constraints, the following things are enforced:
 
-The initial deck is ordered: $\mathrm{D}(0)$ is an identity matrix.
+The initial deck is ordered: $\mathbf{D}(0)$ is an identity matrix.
 
 For reversibility reasons we want each plain text letter to reveal a different top card, which means that each top row of the plain text letter permutation matrices are different: $\mathbf{P} _{0*}(i) \neq \mathbf{P} _{0*}(j)$ for $i \neq j$.
 
@@ -65,7 +65,7 @@ $\bigwedge _i \bigwedge _{j > i} \neg a _{ik} \vee \neg a _{jk}$ ensurses for ro
 For our case, $n$ is the length of the cipher text alphabet or equivalently the deck size. We need one matrix per letter in the plain text alphabet, one for the inital deck and then for each letter of plain text another deck state, giving $(\mathrm{pt\_alphabet} + \mathrm{pt\_size} + 1) \cdot n^2$ variables and $(\mathrm{pt\_alphabet} + \mathrm{pt\_size} + 1) \cdot n(n+1)$ conditions.
 
 ### Permuting the deck (without selectors)
-Since permuting the deck is basically matrix multiplication, we can use a matrix multiplication algorithm. However, it is possible to cut down on conditions by using the fact we are dealing with permutation matrices. For the product $\mathbf{A} \mathbf{B} = \mathbf{C}$ where each is a permutation matrix (in our case one permutation matrix acting on the state of the deck), we need $\bigwedge _{i, j, k} \neq a _{ik} \vee \neq b _{kj} \vee c _{ij}$ giving $n^3$ conditions per multiplication.
+Since permuting the deck is basically matrix multiplication, we can use a matrix multiplication algorithm. However, it is possible to cut down on conditions by using the fact we are dealing with permutation matrices. For the product $\mathbf{A} \mathbf{B} = \mathbf{C}$ where each is a permutation matrix (in our case one permutation matrix acting on the state of the deck), we need $\bigwedge _{i, j, k} \neg a _{ik} \vee \neg b _{kj} \vee c _{ij}$ giving $n^3$ conditions per multiplication.
 
 Because we need one multiplication per letter in the plain text, this results in an additional $\mathrm{pt\_size} \cdot n^3$ with $n$ as the length of the cipher text alphabet.
 
