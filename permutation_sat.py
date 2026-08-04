@@ -671,7 +671,6 @@ def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permut
 
 			if len(other_pts) > 0:
 				other_pt = other_pts[i]
-				print(f"{pt               = }")
 				print(f"pt isomorph code               = '{dc.get_isomorph_code(other_pt)}'")
 				print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
 				print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(other_pt) == dc.get_isomorph_code(reconstructed_pt)}")
