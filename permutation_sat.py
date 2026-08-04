@@ -925,6 +925,31 @@ def fun7_test_cnf_size():
 	solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, write_cnf_then_exit = True)
 
 
+def fun8_another_parallel_solve():
+	pt = "plaintextplaintext"
+	pt_alphabet = "aeilnptx"
+	ct_alphabet = "ABCDEFGHIJK"
+	ct, permutation_table = generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True)
+	
+	pt2 = "textplaintext"
+	pt2_array = dc.str_to_array(pt2, pt_alphabet)
+	ct2_array = dc.encrypt(pt2_array, permutation_table)
+	ct2 = dc.array_to_str(ct2_array, ct_alphabet)
+
+	pt3 = "ptptnilltxt"
+	pt3_array = dc.str_to_array(pt3, pt_alphabet)
+	ct3_array = dc.encrypt(pt3_array, permutation_table)
+	ct3 = dc.array_to_str(ct3_array, ct_alphabet)
+
+	print(ct)
+	print(ct2)
+	print(ct3)
+
+	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = False, use_multiple_ct = True, other_cts = [ct2, ct3])
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, use_multiple_ct = True, other_cts = [ct2, ct3], other_pts = [pt2, pt3], **result)
+
+
+
 
 if __name__ == "__main__":
 	#fun1_reconstruct_pt()
@@ -933,7 +958,8 @@ if __name__ == "__main__":
 	#fun4_does_lzero_depend_on_ct_alphabet_size()
 	#fun5_reconstruct_pt_with_limited_transpositions()
 	#fun6_solve_parallel_ct()
-	fun7_test_cnf_size()
+	#fun7_test_cnf_size()
+	fun8_another_parallel_solve()
 
 	#pt_alphabet = "abcd"
 	#ct_alphabet = "ABCDEFG"
