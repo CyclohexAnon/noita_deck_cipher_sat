@@ -321,7 +321,7 @@ def get_cnf_permutation_equality_up_to_selector(perm_length, offset1, offset2, s
 
 ###################################
 
-def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True, related_permutations = False, related_permutations_free_rows = 3, use_multiple_ct = False, other_cts = []):
+def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True, related_permutations = False, related_permutations_free_rows = 3, use_multiple_ct = False, other_cts = [], write_cnf_then_exit = False):
 	# if use_multiple_ct is True, then for now I will ignore use_known_pt
 	if use_known_pt and use_multiple_ct:
 		print("[Error] Known pt combined with multiple ct is currently not supported!")
@@ -365,6 +365,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 	perm_matrix_offsets = lambda: [permutations[perm_matrix_indices()[n]]["offset"] for n in range(len(perm_matrix_indices()))] # for all the permutation matrices in the list "permutations" return their variable offset
 
 	# create permutation matrices for each plain text letter
+	if debug: print("Creating permutation matrices for pt letters...")
 	for i in range(pt_alphabet_size):
 		num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 		permutations += [{"type": "perm_matrix", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
@@ -372,15 +373,18 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 	pt_letter_permutation_matrix_offsets = perm_matrix_offsets()
 
 	# create the deck
+	if debug: print("Creating permutation matrix for the deck...")
 	num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 	permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 	# create the states of the shuffled deck
+	if debug: print("Creating permutation matrices for states of the deck...")
 	for i in range(pt_length):
 		num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 		permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 	# set deck in an ordered state
+	if debug: print("Setting initial ordering of the deck...")
 	num_var, num_clauses, clauses = get_cnf_permutation_as_identity(perm_length, offset = perm_matrix_offset(pt_alphabet_size))
 	permutations += [{"type": "constraint_identity_matrix", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
@@ -389,6 +393,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		# If it is possible to say "it must be one of the perm_matrices that does it, one of them does but idk which one" instead of the one at pt_letter, then it would not depend on the plain text
 		#
 		# constrain the deck states sequentially as permutation x old_deck = new_deck
+		if debug: print("Constraining the deck with the pt...")
 		for i in range(pt_length):
 			pt_letter = pt_array[i]
 
@@ -396,18 +401,21 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 			permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 	else:
 		# If we do not wish to use the plain text, we need to create an array to hold the reconstructed pt
+		if debug: print("Creating selectors for the pt...")
 		selector_offsets = []
 		for i in range(pt_length):
 			num_var, num_clauses, clauses = get_cnf_pt_selector(pt_alphabet_size, offset = total_var())
 			selector_offsets += [total_var()]
 			permutations += [{"type": "pt_selector", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
+		if debug: print("Constraining the deck with the pt selectors...")
 		# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
 		for i in range(pt_length):
 			num_var, num_clauses, clauses = get_cnf_selector_permutation_product(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
 			permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 		# process cribs
+		if debug: print("Adding cribs...")
 		for i, crib in enumerate(crib_array):
 			if crib == -1: continue
 			num_var, num_clauses, clauses = get_cnf_equality(selector_offsets[i] + crib + 1)
@@ -417,6 +425,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		# If we want to disallow some plaintext UP TO MONOALPHABETIC SUBSTITUTION (i.e. disallow that particular isomorph code), then introduce a permutation matrix (pt_alphabet_size x pt_alphabet_size) and then disallow -position x permutation matrix etc.? Maybe that works? Need to calculate it on paper.
 
 	# constrain the cipher text
+	if debug: print("Constraining the deck to the cipher text...")
 	for i in range(pt_length):
 		ct_letter = ct_array[i]
 
@@ -425,16 +434,19 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 
 	# if we are given multiple cipher texts, we want to have another deck, plaintext selectors, etc., but reuse the plaintext permutation matrices (so one permutation table has to decrypt multiple messages)
 	if use_multiple_ct:
+		if debug: print("Processing additional cts...")
 		all_other_selector_offsets = []
 		for ct_number, other_ct_array in enumerate(list_other_ct_arrays):
 			other_pt_length = list_other_pt_lengths[ct_number]
 
 			# create the deck
+			if debug: print("Creating permutation matrix for the deck...")
 			num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 			offset_of_ordered_deck = total_var()
 			permutations += [{"type": f"perm_matrix_deck{ct_number+2}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 			# create the states of the shuffled deck
+			if debug: print("Creating permutation matrices for states of the deck...")
 			shuffled_deck_offsets = []
 			for i in range(other_pt_length):
 				num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
@@ -442,10 +454,12 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 				permutations += [{"type": f"perm_matrix_deck{ct_number+2}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 			# set deck in an ordered state
+			if debug: print("Setting initial ordering of the deck...")
 			num_var, num_clauses, clauses = get_cnf_permutation_as_identity(perm_length, offset = offset_of_ordered_deck)
 			permutations += [{"type": f"constraint_identity_matrix{ct_number+2}", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 			# create an array to hold the reconstructed pt
+			if debug: print("Creating selectors for the pt...")
 			selector_offsets_new_ct = []
 			for i in range(other_pt_length):
 				num_var, num_clauses, clauses = get_cnf_pt_selector(pt_alphabet_size, offset = total_var())
@@ -454,12 +468,14 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 			all_other_selector_offsets += [selector_offsets_new_ct]
 
 			# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
+			if debug: print("Constraining the deck with the pt selectors...")
 			deck_offsets = lambda x: offset_of_ordered_deck if x == -1 else shuffled_deck_offsets[x]
 			for i in range(other_pt_length):
 				num_var, num_clauses, clauses = get_cnf_selector_permutation_product(perm_length, selectors = [selector_offsets_new_ct[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = deck_offsets(i-1), offset3 = deck_offsets(i))
 				permutations += [{"type": f"constraint_perm_matrix_product{ct_number+2}", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 			# constrain the cipher text
+			if debug: print("Constraining the deck to the cipher text...")
 			for i in range(other_pt_length):
 				ct_letter = other_ct_array[i]
 
@@ -468,6 +484,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 
 		
 	# constrain the pt permutation matrices to map to unique letters
+	if debug: print("Constraining the pt matrices to have unique top cards...")
 	num_var, num_clauses, clauses = get_cnf_unique_top_card(perm_length, offsets = perm_matrix_offsets()[:pt_alphabet_size])
 	permutations += [{"type": "constraint_unique_top_card", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
@@ -481,10 +498,12 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 	# (because s being TRUE trivially satisfies these and thus 'disables' the equality constraint)
 	if related_permutations:
 		# create parent permutation matrix
+		if debug: print("Creating parent permutation matrix...")
 		num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 		parent_permutation_offset = total_var()
 		permutations += [{"type": "perm_matrix_parent", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 		
+		if debug: print("Creating free row counters...")
 		for i in range(pt_alphabet_size):
 			# selectors are free variables
 			offset = total_var()
@@ -513,6 +532,10 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 			f.write(" ".join(list(map(str, clause))) + "\n")
 
 	#print(clauses)
+
+	if write_cnf_then_exit:
+		print("Written CNF, exiting...")
+		return {}
 
 	if debug: print("Running kissat...")
 	subprocess.run(["./run_kissat_permutation.sh"])
@@ -881,6 +904,7 @@ def fun6_solve_parallel_ct():
 	pt2 = "bbaccbb"
 	pt2_array = dc.str_to_array(pt2, pt_alphabet)
 	ct2_array = dc.encrypt(pt2_array, permutation_table)
+
 	ct2 = dc.array_to_str(ct2_array, ct_alphabet)
 
 	print(ct)
@@ -890,6 +914,17 @@ def fun6_solve_parallel_ct():
 	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, use_multiple_ct = True, other_cts = [ct2], other_pts = [pt2], **result)
 
 
+def fun7_test_cnf_size():
+	pt_alphabet = "".join([chr(i+97) for i in range(26)]) + " "
+	ct_alphabet = "".join([chr(i+33) for i in range(83)])
+	ct = "hi"
+
+	print(pt_alphabet)
+	print(ct_alphabet)
+
+	solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, write_cnf_then_exit = True)
+
+
 
 if __name__ == "__main__":
 	#fun1_reconstruct_pt()
@@ -897,13 +932,15 @@ if __name__ == "__main__":
 	#fun3_adversarial_ct_generation()
 	#fun4_does_lzero_depend_on_ct_alphabet_size()
 	#fun5_reconstruct_pt_with_limited_transpositions()
-
-	fun6_solve_parallel_ct()
+	#fun6_solve_parallel_ct()
+	fun7_test_cnf_size()
 
 	#pt_alphabet = "abcd"
 	#ct_alphabet = "ABCDEFG"
 	#ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
 	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True)
 	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
+
+
 
 	

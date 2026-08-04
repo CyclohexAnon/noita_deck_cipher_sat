@@ -6,6 +6,32 @@ The modules used are `numpy` and `subprocess`. The code is tested under Linux on
 
 Also note that the fantastic SAT solver [kissat](https://github.com/arminbiere/kissat) is doing most of the heavy lifting here. Please adjust the paths in `run_kissat_permutation.sh` to your liking. The `-v` option is optional, but may be worth using for long runs to make sure the calculation is, in fact, still running.
 
+For some quantification experiments I have also used [cadet](https://github.com/MarkusRabe/cadet) and [caqe](https://github.com/ltentrup/caqe) in order to solve QBF problems in their respective scripts.
+
+## Usage
+In the file `permutation_sat.py` there is the function `solve()` with various options:
+
+```
+solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True, related_permutations = False, related_permutations_free_rows = 3, use_multiple_ct = False, other_cts = [], write_cnf_then_exit = False)
+```
+
+Here `use_known_pt` is a boolean. If set to True, it will use the given plaintext under `pt` in the solving process. This is useful if you want to know whether given a ciphertext-plaintext pair there exists some permutation table that transforms one into the other. This is useful for validating. If set to False, then the solver tries to find whether some plaintext together with some permutation table exists that produce the ciphertext (if the solver returns UNSAT, that would mean that the ciphertext is unreachable).
+
+The option `cribs` defines a list of dictionaries. Each dictionary contains a `val` and `pos` field, where `val` is a plaintext string and `pos` defines where in the plaintext the crib should occur. In this sense the option is similar to `use_known_pt`, but works when only a partial plaintext is known.
+
+The option `related_permutations` is a boolean and sets whether or not all plaintext permutations should be related in some way. This means an additional parent permutation is created, from which all other permutations (for each plaintext letter) derive by some difference. This difference is determined by `related_permutations_free_rows`, which says how many rows in the permutation matrices are allowed to be different from the parent permutation. The minimum sensible value is 2 (a single transposition difference).
+
+The option `use_multiple_ct` is a boolean and determines if the one permutation table should also solve other ciphertexts. These are given as a list in `other_cts`. They dont need to be the same length. Currently you can only set cribs for the first ct and you cant set plaintexts for the other ciphertexts.
+
+The option `debug` will print additional info during the solving process.
+
+Normally kissat is called after having written the CNF. If you just want to write the CNF, set the option `write_cnf_then_exit` to True.
+
+Various applications are shown in the functions named `fun*_...` called at the bottom of the script (may be commented out).
+
+Keep in mind that due to the scaling with ct and pt alphabet sizes that the CNF might become very large. Preliminary tests show that a cipher of the size of the eyes may take upwards of a gigabyte per ciphertext letter. Solving a cipher of this size has not been attempted and may take an astronomically long time (SAT is still an NP hard problem and if you're unlucky and the example is somehow pathological for the solver it may take a very long time). Nonetheless even some fairly big examples have been tried and solved.
+
+
 ## Some explanations
 The deck cipher mechanism is explained by [Lymm's wiki](https://github.com/Lymm37/eye-messages/wiki/Group-Autokey-%28GAK%29). To encode the mechanism as a SAT problem, the following steps are used:
 
