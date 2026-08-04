@@ -321,7 +321,12 @@ def get_cnf_permutation_equality_up_to_selector(perm_length, offset1, offset2, s
 
 ###################################
 
-def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True, related_permutations = False, related_permutations_free_rows = 3):
+def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, cribs = [], debug = True, related_permutations = False, related_permutations_free_rows = 3, use_multiple_ct = False, other_cts = []):
+	# if use_multiple_ct is True, then for now I will ignore use_known_pt
+	if use_known_pt and use_multiple_ct:
+		print("[Error] Known pt combined with multiple ct is currently not supported!")
+		return {}
+
 	if pt is not None: pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.str_to_array(ct, ct_alphabet)
 
@@ -337,6 +342,14 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 	for d in cribs:
 		for i in range(len(d["val"])):
 			crib_array[d["pos"] + i] = pt_alphabet.index(d["val"][i])
+
+	if use_multiple_ct:
+		list_other_ct_arrays = []
+		list_other_pt_lengths = []
+		for c in other_cts:
+			list_other_ct_arrays += [dc.str_to_array(c, ct_alphabet)]
+			list_other_pt_lengths += [len(c)]
+
 
 	# explanation about the term offset: the variables count up in order with every new addition, therefore later permutation matrices must be "offset" to account for the already used variables
 
@@ -409,6 +422,50 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 
 		num_var, num_clauses, clauses = get_cnf_ct_permutation_equality(perm_length, ct_letter, offset = perm_matrix_offset(pt_alphabet_size + i + 1))
 		permutations += [{"type": "constraint_ct_letter", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	# if we are given multiple cipher texts, we want to have another deck, plaintext selectors, etc., but reuse the plaintext permutation matrices (so one permutation table has to decrypt multiple messages)
+	if use_multiple_ct:
+		all_other_selector_offsets = []
+		for ct_number, other_ct_array in enumerate(list_other_ct_arrays):
+			other_pt_length = list_other_pt_lengths[ct_number]
+
+			# create the deck
+			num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+			offset_of_ordered_deck = total_var()
+			permutations += [{"type": f"perm_matrix_deck{ct_number+2}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# create the states of the shuffled deck
+			shuffled_deck_offsets = []
+			for i in range(other_pt_length):
+				num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+				shuffled_deck_offsets += [total_var()]
+				permutations += [{"type": f"perm_matrix_deck{ct_number+2}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# set deck in an ordered state
+			num_var, num_clauses, clauses = get_cnf_permutation_as_identity(perm_length, offset = offset_of_ordered_deck)
+			permutations += [{"type": f"constraint_identity_matrix{ct_number+2}", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# create an array to hold the reconstructed pt
+			selector_offsets_new_ct = []
+			for i in range(other_pt_length):
+				num_var, num_clauses, clauses = get_cnf_pt_selector(pt_alphabet_size, offset = total_var())
+				selector_offsets_new_ct += [total_var()]
+				permutations += [{"type": f"pt_selector{ct_number+2}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+			all_other_selector_offsets += [selector_offsets_new_ct]
+
+			# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
+			deck_offsets = lambda x: offset_of_ordered_deck if x == -1 else shuffled_deck_offsets[x]
+			for i in range(other_pt_length):
+				num_var, num_clauses, clauses = get_cnf_selector_permutation_product(perm_length, selectors = [selector_offsets_new_ct[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = deck_offsets(i-1), offset3 = deck_offsets(i))
+				permutations += [{"type": f"constraint_perm_matrix_product{ct_number+2}", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# constrain the cipher text
+			for i in range(other_pt_length):
+				ct_letter = other_ct_array[i]
+
+				num_var, num_clauses, clauses = get_cnf_ct_permutation_equality(perm_length, ct_letter, offset = shuffled_deck_offsets[i])
+				permutations += [{"type": f"constraint_ct_letter{ct_number+2}", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
 		
 	# constrain the pt permutation matrices to map to unique letters
 	num_var, num_clauses, clauses = get_cnf_unique_top_card(perm_length, offsets = perm_matrix_offsets()[:pt_alphabet_size])
@@ -500,6 +557,14 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 				if (m := int(n)) != 0 and abs(m) >= selector_offsets[0] and abs(m) <= (selector_offsets[-1] + pt_alphabet_size):	
 					selection_matrix[selector_code_to_pos(abs(m), selector_offsets[0])] = np.sign(m)
 
+		if use_multiple_ct:
+			all_selection_matrices = []
+			for i, selector_offsets_new_ct in enumerate(all_other_selector_offsets):
+				all_selection_matrices += [np.empty((list_other_pt_lengths[i], pt_alphabet_size), dtype = int)]
+				for n in expression.strip().split(" "):	
+					if (m := int(n)) != 0 and abs(m) >= selector_offsets_new_ct[0] and abs(m) <= (selector_offsets_new_ct[-1] + pt_alphabet_size):	
+						all_selection_matrices[i][selector_code_to_pos(abs(m), selector_offsets_new_ct[0])] = np.sign(m)
+
 		if use_known_pt:
 			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "parent_permutation" : parent_permutation}
 
@@ -509,13 +574,24 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 			for row in selection_matrix:
 				reconstructed_pt += pt_alphabet[np.nonzero(row == 1)[0][0]]
 
-			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt, "parent_permutation" : parent_permutation}
+			if use_multiple_ct:
+				other_reconstructed_pts = []
+				for other_selection_matrix in all_selection_matrices:
+					other_reconstructed_pt = ""
+					for row in other_selection_matrix:
+						other_reconstructed_pt += pt_alphabet[np.nonzero(row == 1)[0][0]]
+					other_reconstructed_pts += [other_reconstructed_pt]
+
+				return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt, "parent_permutation" : parent_permutation, "other_reconstructed_pts" : other_reconstructed_pts}
+
+			else:
+				return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt, "parent_permutation" : parent_permutation}
 		
 	else:
 		# UNSATISFIABLE
 		return {"satisfiable" : False}
 
-def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, permutation_table_reconstructed = None, reconstructed_pt = None, satisfiable = None, parent_permutation = None):
+def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, permutation_table_reconstructed = None, reconstructed_pt = None, satisfiable = None, parent_permutation = None, use_multiple_ct = False, other_cts = [], other_reconstructed_pts = [], other_pts = []):
 	if parent_permutation is not None:
 		print("Parent permutation:")
 		print(np.array(parent_permutation))
@@ -536,23 +612,47 @@ def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permut
 		print(f"{pt_from_reconstructed_permutation_table = }")
 		print(f"Correct decryption: {pt_from_reconstructed_permutation_table == pt}")
 
-	else:
-		# we need to use the reconstructed pt and the reconstructed permutation table to check
-		reconstructed_pt_array = dc.str_to_array(reconstructed_pt, pt_alphabet)
-		reconstructed_ct_array = dc.encrypt(reconstructed_pt_array, permutation_table_reconstructed)
-		reconstructed_ct = dc.array_to_str(reconstructed_ct_array, ct_alphabet)
+		return
 
-		if pt is not None: print(f"{pt               = }")
-		print(f"{reconstructed_pt = }")
-		print(f"{ct               = }")
-		print(f"{reconstructed_ct = }")
+	# we need to use the reconstructed pt and the reconstructed permutation table to check
+	reconstructed_pt_array = dc.str_to_array(reconstructed_pt, pt_alphabet)
+	reconstructed_ct_array = dc.encrypt(reconstructed_pt_array, permutation_table_reconstructed)
+	reconstructed_ct = dc.array_to_str(reconstructed_ct_array, ct_alphabet)
 
-		print(f"Correct ct reproduction: {ct == reconstructed_ct}")
-		print("-"*10)
+	if pt is not None: print(f"{pt               = }")
+	print(f"{reconstructed_pt = }")
+	print(f"{ct               = }")
+	print(f"{reconstructed_ct = }")
 
-		if pt is not None: print(f"pt isomorph code               = '{dc.get_isomorph_code(pt)}'")
-		if pt is not None: print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
-		if pt is not None: print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(pt) == dc.get_isomorph_code(reconstructed_pt)}")
+	print(f"Correct ct reproduction: {ct == reconstructed_ct}")
+	#print("-"*10)
+
+	if pt is not None: print(f"pt isomorph code               = '{dc.get_isomorph_code(pt)}'")
+	if pt is not None: print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
+	if pt is not None: print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(pt) == dc.get_isomorph_code(reconstructed_pt)}")
+
+	if use_multiple_ct:
+		for i, c in enumerate(other_cts):
+			print("-"*10 + f" for ct {i+2} " + "-"*10)
+			reconstructed_pt = other_reconstructed_pts[i]
+			reconstructed_pt_array = dc.str_to_array(reconstructed_pt, pt_alphabet)
+			reconstructed_ct_array = dc.encrypt(reconstructed_pt_array, permutation_table_reconstructed)
+			reconstructed_ct = dc.array_to_str(reconstructed_ct_array, ct_alphabet)
+			
+			if len(other_pts) > 0: print(f"pt               = '{other_pts[i]}'")
+			print(f"{reconstructed_pt = }")
+			print(f"ct               = '{c}'")
+			print(f"{reconstructed_ct = }")
+
+			print(f"Correct ct reproduction: {c == reconstructed_ct}")
+
+			if len(other_pts) > 0:
+				other_pt = other_pts[i]
+				print(f"{pt               = }")
+				print(f"pt isomorph code               = '{dc.get_isomorph_code(other_pt)}'")
+				print(f"reconstructed pt isomorph code = '{dc.get_isomorph_code(reconstructed_pt)}'")
+				print(f"reconstructed pt is monoalphabetic substitution of pt: {dc.get_isomorph_code(other_pt) == dc.get_isomorph_code(reconstructed_pt)}")
+
 
 def generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True):
 	permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
@@ -772,12 +872,33 @@ def fun5_reconstruct_pt_with_limited_transpositions():
 	#  [10  7  1  6  3  5  9  2  4  8  0]]
 	# but it can be done with three free rows!
 
+def fun6_solve_parallel_ct():
+	pt = "abbbacaba"
+	pt_alphabet = "abc"
+	ct_alphabet = "ABCD"
+	ct, permutation_table = generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True)
+	
+	pt2 = "bbaccbb"
+	pt2_array = dc.str_to_array(pt2, pt_alphabet)
+	ct2_array = dc.encrypt(pt2_array, permutation_table)
+	ct2 = dc.array_to_str(ct2_array, ct_alphabet)
+
+	print(ct)
+	print(ct2)
+
+	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = False, use_multiple_ct = True, other_cts = [ct2])
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, use_multiple_ct = True, other_cts = [ct2], other_pts = [pt2], **result)
+
+
+
 if __name__ == "__main__":
 	#fun1_reconstruct_pt()
 	#fun2_calculate_reachable_and_unreachable_ct()
 	#fun3_adversarial_ct_generation()
 	#fun4_does_lzero_depend_on_ct_alphabet_size()
-	fun5_reconstruct_pt_with_limited_transpositions()
+	#fun5_reconstruct_pt_with_limited_transpositions()
+
+	fun6_solve_parallel_ct()
 
 	#pt_alphabet = "abcd"
 	#ct_alphabet = "ABCDEFG"
