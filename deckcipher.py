@@ -184,34 +184,60 @@ def get_permutation_table_with_swaps(ct_deck_size, pt_deck_size, seed = None, do
 
 
 if __name__ == "__main__":
-	pt = "abcdabcd"
-	pt_alphabet = "abcd"
-	ct_alphabet = "ABCDEF"
+	# pt = "abcdabcd"
+	# pt_alphabet = "abcd"
+	# ct_alphabet = "ABCDEF"
 
-	#pt = "this a very secret message and this a very secret message"
-	#pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
-	#ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	# #pt = "this a very secret message and this a very secret message"
+	# #pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
+	# #ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-	#permutation_table = get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
-	permutation_table = get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 1, double_free = False, swaps_from_parent = 3)
+	# #permutation_table = get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
+	# permutation_table = get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 1, double_free = False, swaps_from_parent = 3)
 
 
-	print(f"{pt = }")
-	pt_array = str_to_array(pt, pt_alphabet)
-	ct_array = encrypt(pt_array, permutation_table)
-	ct = array_to_str(ct_array, ct_alphabet)
-	print(f"{ct = }")
-	roundtrip_array = decrypt(ct_array, permutation_table)
-	roundtrip = array_to_str(roundtrip_array, pt_alphabet)
-	print(f"{roundtrip = }")
+	# print(f"{pt = }")
+	# pt_array = str_to_array(pt, pt_alphabet)
+	# ct_array = encrypt(pt_array, permutation_table)
+	# ct = array_to_str(ct_array, ct_alphabet)
+	# print(f"{ct = }")
+	# roundtrip_array = decrypt(ct_array, permutation_table)
+	# roundtrip = array_to_str(roundtrip_array, pt_alphabet)
+	# print(f"{roundtrip = }")
 
-	#print(get_all_isomorphs("OLPJ3P-O3OLPJ3P-O3", 9))
-	#print(get_all_isomorphs(ct, 9))
+	# #print(get_all_isomorphs("OLPJ3P-O3OLPJ3P-O3", 9))
+	# #print(get_all_isomorphs(ct, 9))
 
-	# next: merge overlapping isomorphs, trim "." beginning and end, try different lengths?
+	# # next: merge overlapping isomorphs, trim "." beginning and end, try different lengths?
 
-	print(ct_array)
-	print(permutation_table)
+	# print(ct_array)
+	# print(permutation_table)
 
-	permutation_table = get_permutation_table_with_swaps(10, 3, seed = 1, double_free = False, swaps_from_parent = 1)
-	print(permutation_table)
+	# permutation_table = get_permutation_table_with_swaps(10, 3, seed = 1, double_free = False, swaps_from_parent = 1)
+	# print(permutation_table)
+
+	from itertools import groupby
+
+	#pt_alphabet = "abcdefg"
+	#ct_alphabet = "ABCDEFGHIJKLM"
+	#pt_deck_size = len(pt_alphabet)
+	#ct_deck_size = len(ct_alphabet)
+	pt_deck_size = 7
+	ct_deck_size = 13
+
+
+	pt_len = 1000
+	rng = np.random.default_rng(seed = 0)
+
+	all_occurences = np.zeros(ct_deck_size)
+
+	for i in range(1000):
+		pt_array = rng.choice(pt_deck_size, size = pt_len, p = np.arange(pt_deck_size)[::-1]/np.sum(np.arange(pt_deck_size)))
+		permutation_table = get_permutation_table_with_swaps(ct_deck_size, pt_deck_size, seed = None, double_free = False, swaps_from_parent = 1)
+		ct_array = encrypt(pt_array, permutation_table)
+
+		occurrence = [len(list(group)) for key, group in groupby(sorted(list(ct_array)))]
+		all_occurences[:len(occurrence)] += sorted(occurrence)[::-1]
+
+	print(all_occurences)
+
