@@ -17,6 +17,7 @@ def check_if_legal_permutation_table(permutation_table):
 				return False
 	seen = []
 	for i in range(len(permutation_table)):
+		if permutation_table[i][0] == -1: continue
 		if i == 0: seen += [permutation_table[i][0]]; continue
 		if permutation_table[i][0] in seen: return False
 		seen += [permutation_table[i][0]]
@@ -154,6 +155,136 @@ def prop_up(pt_array, permutation_table, deck, line, ct_letter, ct_index_prev_li
 
 
 
+
+
+
+# I think I need to do this more carefully
+
+
+# percolating upwards
+def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_letter_pos):
+	#current_pos = 1 # chosen bc first position without assigned pt letter
+
+	#target_ct_letter_pos = 0
+	target_ct_letter = deck[current_pos][target_ct_letter_pos] # this is the letter we want to get
+
+	# this letter has to come from somewhere, so check where it could come from
+	previous_line = current_pos - 1
+
+	# first check if it is present: if it is present, we know where we need to look
+	positions = []
+	for i, val in enumerate(deck[previous_line]):
+		if val == target_ct_letter:
+			positions += [i]
+			break
+
+	if len(positions) == 0:
+		# This means it was not found, so next we look for free spots, denoted by -1
+		for i, val in enumerate(deck[previous_line]):
+			if val == -1:
+				positions += [i]
+
+	if len(positions) == 0:
+		# if we havent found any position now, that means we are DEFINTELY in a corner
+		print("Impossible to continue")
+		exit()
+
+	# So we have obtained some possible positions where the letter could have come from in the previous line
+	# Thus, we can loop over each of them to try them out exhaustively
+
+	print(f"{positions = }")
+
+	for pos in positions:
+		# try placing it there in the deck
+		temp_deck = copy.deepcopy(deck)
+		temp_deck[previous_line][pos] = target_ct_letter
+
+		# next we need to ask: how could it have gotten there?
+
+		if pt_array[current_pos] != -1:
+			# we have already decided on a pt letter here, so we must add this info to permutation table there
+			row_indices_in_perm_table = [pt_array[current_pos]]
+		else:
+			# we have not yet decided on a pt letter at this position
+			# naively, we have pt_alphabet choices for rows now
+
+			# but actually, if we are in column zero we should also check if we havent already used this elsewhere
+			if target_ct_letter_pos == 0:
+				row_indices_in_perm_table = []
+				for i in range(len(permutation_table)):
+					if permutation_table[i][0] == target_ct_letter:
+						row_indices_in_perm_table += [i]
+						break
+				if len(row_indices_in_perm_table) == 0:
+					for i in range(len(permutation_table)):
+						if permutation_table[i][0] == -1:
+							row_indices_in_perm_table += [i]
+
+			else:
+				row_indices_in_perm_table = [i for i in range(len(permutation_table))]
+
+
+		for row_index_in_perm_table in row_indices_in_perm_table:
+			# the value went from pos in the previous line to target_ct_letter_pos in the current line
+			# e.g.
+			#      . . . . T . . . previous line
+			#      . . T . . . . . current line
+			# -->  . . 4 . . . . . perm table row
+
+			# we should check if the spot is even available!
+			if permutation_table[row_index_in_perm_table][target_ct_letter_pos] != -1 and \
+			   permutation_table[row_index_in_perm_table][target_ct_letter_pos] != pos:
+			   # the position is not free and also not already occupied with what we want
+			   # a contradiction
+			   continue
+			temp_permutation_table = copy.deepcopy(permutation_table)
+			temp_permutation_table[row_index_in_perm_table][target_ct_letter_pos] = pos
+
+			temp_pt_array = copy.deepcopy(pt_array)
+			temp_pt_array[current_pos] = row_index_in_perm_table
+
+			# --> call next step one layer up
+			# unless previous_line == 0, then step one layer down on the outside recursion?
+
+			if not check_if_legal_permutation_table(temp_permutation_table):
+				print("Not legal permutation table")
+				#print(temp_permutation_table)
+				print("-"*10)
+				continue
+			
+			print(f"{row_index_in_perm_table = }")
+			report(temp_pt_array, temp_permutation_table, temp_deck)
+			print("-"*10)
+
+			if previous_line == 0:
+				pass
+				# percolate down
+
+				print("AAAAAAAAAAAAAAAAAAAA")
+
+				exit()
+			else:
+				pass
+				#percolate_up(temp_pt_array, temp_permutation_table, temp_deck, previous_line, pos)
+
+	# if we land down here something has gone wrong I think
+	# i.e. nothing has worked out
+	return
+ 
+
+	# next todo is where to check if any contradictions arose?
+
+def percolate_down(pt_array, permutation_table, deck, current_pos):
+	#report(pt_array, permutation_table, deck)
+
+	if current_pos >= len(deck):
+		exit()
+
+	# call prop_up to percolate ct_letter upwards through the deck
+	#prop_up(pt_array, permutation_table, deck, line-1, ct_letter, ct_index_prev_line = 0, return_line = line+1)
+	percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_letter_pos = 0)
+
+
 # -1 means undecided
 deck = [[0,  1,  2,  3],
 		[2, -1, -1, -1],
@@ -162,7 +293,7 @@ deck = [[0,  1,  2,  3],
 		[0, -1, -1, -1]]
 # --> ct_array = [2, 3, 0]
 
-permutation_table = [[-1, -1, -1, -1],
+permutation_table = [[2, -1, -1, -1],
 					 [-1, -1, -1, -1]]
 # --> 2 at the front is kinda forced due to ct and initial ordering of the deck
 
@@ -172,95 +303,4 @@ pt_array = [0, -1, -1, -1]
 #prop_down(pt_array, permutation_table, deck, line = 2)
 # --> line = 2 because we have already set line 1
 
-
-# I think I need to do this more carefully
-
-# percolating upwards
-current_pos = 1 # chosen bc first position without assigned pt letter
-
-target_ct_letter_pos = 0
-target_ct_letter = deck[current_pos][target_ct_letter_pos] # this is the letter we want to get
-
-# this letter has to come from somewhere, so check where it could come from
-previous_line = current_pos - 1
-
-# first check if it is present: if it is present, we know where we need to look
-positions = []
-for i, val in enumerate(deck[previous_line]):
-	if val == target_ct_letter:
-		positions += [i]
-		break
-
-if len(positions) == 0:
-	# This means it was not found, so next we look for free spots, denoted by -1
-	for i, val in enumerate(deck[previous_line]):
-		if val == -1:
-			positions += [i]
-
-if len(positions) == 0:
-	# if we havent found any position now, that means we are DEFINTELY in a corner
-	print("Impossible to continue")
-	exit()
-
-# So we have obtained some possible positions where the letter could have come from in the previous line
-# Thus, we can loop over each of them to try them out exhaustively
-
-print(f"{positions = }")
-
-for pos in positions:
-	# try placing it there in the deck
-	temp_deck = copy.deepcopy(deck)
-	temp_deck[previous_line][pos] = target_ct_letter
-
-	# next we need to ask: how could it have gotten there?
-
-	if pt_array[current_pos] != -1:
-		# we have already decided on a pt letter here, so we must add this info to permutation table there
-		row_indices_in_perm_table = [pt_array[current_pos]]
-	else:
-		# we have not yet decided on a pt letter at this position
-		# naively, we have pt_alphabet choices for rows now
-
-		# but actually, if we are in column zero we should also check if we havent already used this elsewhere
-		if target_ct_letter_pos == 0:
-			row_indices_in_perm_table = []
-			for i in range(len(permutation_table)):
-				if permutation_table[i][0] == target_ct_letter:
-					row_indices_in_perm_table += [i]
-					break
-			if len(row_indices_in_perm_table) == 0:
-				for i in range(len(permutation_table)):
-					if permutation_table[i][0] == -1:
-						row_indices_in_perm_table += [i]
-
-		else:
-			row_indices_in_perm_table = [i for i in range(len(permutation_table))]
-
-
-	for row_index_in_perm_table in row_indices_in_perm_table:
-		# the value went from pos in the previous line to target_ct_letter_pos in the current line
-		# e.g.
-		#      . . . . T . . . previous line
-		#      . . T . . . . . current line
-		# -->  . . 4 . . . . . perm table row
-
-		# we should check if the spot is even available!
-		if permutation_table[row_index_in_perm_table][target_ct_letter_pos] != -1 and \
-		   permutation_table[row_index_in_perm_table][target_ct_letter_pos] != pos:
-		   # the position is not free and also not already occupied with what we want
-		   # a contradiction
-		   continue
-		temp_permutation_table = copy.deepcopy(permutation_table)
-		temp_permutation_table[row_index_in_perm_table][target_ct_letter_pos] = pos
-
-		temp_pt_array = copy.deepcopy(pt_array)
-		temp_pt_array[current_pos] = row_index_in_perm_table
-
-		# --> call next step one layer up
-		# unless previous_line == 0, then step one layer down on the outside recursion?
-		
-		print(f"{row_index_in_perm_table = }")
-		report(temp_pt_array, temp_permutation_table, temp_deck)
-		print("-"*10)
-
-# next todo is where to check if any contradictions arose?
+percolate_down(pt_array, permutation_table, deck, current_pos = 2)
