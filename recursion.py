@@ -24,152 +24,23 @@ def check_if_legal_permutation_table(permutation_table):
 
 	return True
 
-
-def prop_down(pt_array, permutation_table, deck, line):
-	print("> prop_down called")
-	report(pt_array, permutation_table, deck)
-
-	if line >= len(deck):
-		exit()
-
-	ct_letter = deck[line][0]
-	# call prop_up to percolate ct_letter upwards through the deck
-	prop_up(pt_array, permutation_table, deck, line-1, ct_letter, ct_index_prev_line = 0, return_line = line+1)
-	
-
-
-def prop_up(pt_array, permutation_table, deck, line, ct_letter, ct_index_prev_line, return_line):
-	print("> prop_up called")
-	report(pt_array, permutation_table, deck)
-	print(f"{line = }")
-	print(f"{ct_letter = }")
-
-	if line == 0:
-		print("#######")
-		# value needs to go from <value> to ct_index_prev_line for pt_array[0]
-		temp_permutation_table = permutation_table.copy()
-		temp_permutation_table[pt_array[0]][ct_index_prev_line] = ct_letter
-		print(f"set permutation table ({pt_array[0]},{ct_index_prev_line}) = {ct_letter}")
-
-		print("#######")
-
-		r = check_if_legal_permutation_table(temp_permutation_table)
-		#if r is False: return
-
-		prop_down(pt_array, temp_permutation_table, deck, return_line)
-
-	for i, v in enumerate(deck[line]):
-		if v == ct_letter:
-			print("!!!!!!!!!!!!!!!!")
-			# this occurs if the previous line already has that ct letter fixed in the deck
-			# so we are forced to take that one
-			if pt_array[line] == -1:
-				# we can decide on a pt letter
-				for j, row in enumerate(permutation_table):
-					if row[0] == ct_index_prev_line:
-						pass
-						# we have to use that one
-
-				for j, row in enumerate(permutation_table):
-					if row[0] == -1:
-						# for every of these choices, continue
-						pass
-
-				# if we are here, then nothing worked, so we need to backtrack
-				print("Backtracking here...")
-				return
-
-
-			else:
-				# we are forced to use a specific pt letter
-				if permutation_table[pt_array[line]][0] == ct_index_prev_line:
-					# okay, pick that one
-					print("Hiiiiiiiiiiiiiiiii")
-
-					report(pt_array, permutation_table, deck)
-					print(f"{line = }")
-					print(f"{pt_array[line] = }")
-					print(f"{ct_index_prev_line = }")
-					print(f"{permutation_table[pt_array[line]] = }")
-					pass
-				else:
-					# dead end
-					print("Backtracking...")
-					return
-
-
-		if v == -1:
-			temp_deck = copy.deepcopy(deck)
-			temp_deck[line][i] = ct_letter
-			# need to also update permutation table
-
-			# step 1: find ct letter in current line -> position x
-			# This is already done by passing the position from the previous call -> ct_index_prev_line
-
-			# step 2: find a plaintext letter that would bring the letter from v (line-1) to x (line)
-			#         if there is an entry in permutation_table[:,0], use that
-			#         otherwise fill the first space of a different row
-			#         if no row is free, it is impossible, so return backwards
-
-			print(f"plaintext {line = } is {pt_array[line]}")
-			print(f"{ct_index_prev_line = }")
-			print(f"{i = }")
-
-			choice = [False, []]
-
-			if pt_array[line] == -1:
-				for j, row in enumerate(permutation_table):
-					if row[ct_index_prev_line] == i or row[ct_index_prev_line] == -1: # i think == i is wrong here
-						choice[0] = True
-						choice[1] += [j]
-			else:
-				row = permutation_table[pt_array[line]]
-				if row[ct_index_prev_line] == i or row[ct_index_prev_line] == -1:
-					choice[0] = True
-					choice[1] += [pt_array[line]]
-
-			print(f"choice: {choice}")
-			if choice[0] == False: return # impossible
-
-
-
-			for row_index in choice[1]:
-				if ct_index_prev_line == 0:
-					if pt_array[line] == -1:
-						pt_array[line] = row_index
-					elif pt_array[line] != row_index:
-						# we would choose an already taken index, a contradiction
-						return
-
-				temp_permutation_table = copy.deepcopy(permutation_table)
-
-				#if row_index-1 > 0:
-				#	temp_permutation_table[row_index-1][ct_index_prev_line] = i
-				#if row_index+1 < len(deck):
-				#	temp_permutation_table[row_index+1][ct_index_prev_line] = i
-
-				temp_permutation_table[row_index][ct_index_prev_line] = i
-				print(f"Setting permutation_table ({row_index},{ct_index_prev_line}) to {i}")
-				prop_up(pt_array, temp_permutation_table, temp_deck, line-1, ct_letter, i, return_line)
-
-
-
-
-
-
-
-# I think I need to do this more carefully
-
-
 # percolating upwards
-def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_letter_pos):
-	#current_pos = 1 # chosen bc first position without assigned pt letter
+def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_letter_pos, return_line):
+	if debug:
+		print(f"> perc up called with {current_pos = }, {target_ct_letter_pos = }, {return_line = }")
+		report(pt_array, permutation_table, deck)
+		print("."*5)
+
+	# current pos is the position IN THE DECK that we start from
+	# i.e. for the first pt letter you start at 1 and not at 0
 
 	#target_ct_letter_pos = 0
 	target_ct_letter = deck[current_pos][target_ct_letter_pos] # this is the letter we want to get
 
 	# this letter has to come from somewhere, so check where it could come from
 	previous_line = current_pos - 1
+
+	current_pt_position = current_pos - 1
 
 	# first check if it is present: if it is present, we know where we need to look
 	positions = []
@@ -192,7 +63,7 @@ def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_lette
 	# So we have obtained some possible positions where the letter could have come from in the previous line
 	# Thus, we can loop over each of them to try them out exhaustively
 
-	print(f"{positions = }")
+	if debug: print(f"{positions = }")
 
 	for pos in positions:
 		# try placing it there in the deck
@@ -201,28 +72,33 @@ def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_lette
 
 		# next we need to ask: how could it have gotten there?
 
-		if pt_array[current_pos] != -1:
+		if pt_array[current_pt_position] != -1:
 			# we have already decided on a pt letter here, so we must add this info to permutation table there
-			row_indices_in_perm_table = [pt_array[current_pos]]
+			row_indices_in_perm_table = [pt_array[current_pt_position]]
 		else:
 			# we have not yet decided on a pt letter at this position
 			# naively, we have pt_alphabet choices for rows now
 
 			# but actually, if we are in column zero we should also check if we havent already used this elsewhere
-			if target_ct_letter_pos == 0:
-				row_indices_in_perm_table = []
-				for i in range(len(permutation_table)):
-					if permutation_table[i][0] == target_ct_letter:
-						row_indices_in_perm_table += [i]
-						break
-				if len(row_indices_in_perm_table) == 0:
-					for i in range(len(permutation_table)):
-						if permutation_table[i][0] == -1:
-							row_indices_in_perm_table += [i]
+			#if target_ct_letter_pos == 0:
+			#	row_indices_in_perm_table = []
 
-			else:
-				row_indices_in_perm_table = [i for i in range(len(permutation_table))]
+				#for i in range(len(permutation_table)):
+				#	if permutation_table[i][0] == target_ct_letter:
+				#		row_indices_in_perm_table += [i]
+				#		break
+				#print(f"> {row_indices_in_perm_table = }")
+				#if len(row_indices_in_perm_table) == 0:
+				#	for i in range(len(permutation_table)):
+				#		if permutation_table[i][0] == -1:
+				#			row_indices_in_perm_table += [i]
+			#else:
+			#	row_indices_in_perm_table = [i for i in range(len(permutation_table))]
+			row_indices_in_perm_table = [i for i in range(len(permutation_table))]
 
+
+		if debug: print(f"{row_indices_in_perm_table = }")
+		#exit()
 
 		for row_index_in_perm_table in row_indices_in_perm_table:
 			# the value went from pos in the previous line to target_ct_letter_pos in the current line
@@ -230,6 +106,7 @@ def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_lette
 			#      . . . . T . . . previous line
 			#      . . T . . . . . current line
 			# -->  . . 4 . . . . . perm table row
+
 
 			# we should check if the spot is even available!
 			if permutation_table[row_index_in_perm_table][target_ct_letter_pos] != -1 and \
@@ -240,32 +117,41 @@ def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_lette
 			temp_permutation_table = copy.deepcopy(permutation_table)
 			temp_permutation_table[row_index_in_perm_table][target_ct_letter_pos] = pos
 
+			temp_permutation_table = update_permutation_table(temp_permutation_table)
+
 			temp_pt_array = copy.deepcopy(pt_array)
-			temp_pt_array[current_pos] = row_index_in_perm_table
+			temp_pt_array[current_pt_position] = row_index_in_perm_table
 
 			# --> call next step one layer up
 			# unless previous_line == 0, then step one layer down on the outside recursion?
 
 			if not check_if_legal_permutation_table(temp_permutation_table):
-				print("Not legal permutation table")
+				if debug: print("Not legal permutation table")
 				#print(temp_permutation_table)
-				print("-"*10)
+				if debug: print("-"*10)
 				continue
+
+			# recalculate deck because we have added info to it
+			temp_deck = update_deck(temp_pt_array, temp_permutation_table, temp_deck)
 			
-			print(f"{row_index_in_perm_table = }")
-			report(temp_pt_array, temp_permutation_table, temp_deck)
-			print("-"*10)
+			if debug:
+				print(f"{row_index_in_perm_table = }")
+				report(temp_pt_array, temp_permutation_table, temp_deck)
+				print("-"*10)
 
 			if previous_line == 0:
 				pass
 				# percolate down
 
-				print("AAAAAAAAAAAAAAAAAAAA")
+				#print("AAAAAAAAAAAAAAAAAAAA")
 
-				exit()
+				#exit()
+
+				percolate_down(temp_pt_array, temp_permutation_table, temp_deck, return_line)
+
 			else:
 				pass
-				#percolate_up(temp_pt_array, temp_permutation_table, temp_deck, previous_line, pos)
+				percolate_up(temp_pt_array, temp_permutation_table, temp_deck, previous_line, pos, return_line)
 
 	# if we land down here something has gone wrong I think
 	# i.e. nothing has worked out
@@ -277,30 +163,130 @@ def percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_lette
 def percolate_down(pt_array, permutation_table, deck, current_pos):
 	#report(pt_array, permutation_table, deck)
 
+	if debug: print(f"> perc down called with {current_pos = }")
+
 	if current_pos >= len(deck):
+		print("Success!")
+		report(pt_array, permutation_table, deck)
+		print("Validating:")
+		validate_solution(pt_array, permutation_table, deck)
+		print("Finished successfully, exiting...")
 		exit()
 
 	# call prop_up to percolate ct_letter upwards through the deck
 	#prop_up(pt_array, permutation_table, deck, line-1, ct_letter, ct_index_prev_line = 0, return_line = line+1)
-	percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_letter_pos = 0)
+	percolate_up(pt_array, permutation_table, deck, current_pos, target_ct_letter_pos = 0, return_line = current_pos+1)
 
 
 # -1 means undecided
-deck = [[0,  1,  2,  3],
-		[2, -1, -1, -1],
-		[3, -1, -1, -1],
-		[0, -1, -1, -1],
-		[0, -1, -1, -1]]
+#deck = [[0,  1,  2,  3],
+#		[2,  0, -1, -1],
+#		[3, -1, -1, -1],
+#		[0, -1, -1, -1],
+#		[0, -1, -1, -1]]
 # --> ct_array = [2, 3, 0]
 
-permutation_table = [[2, -1, -1, -1],
-					 [-1, -1, -1, -1]]
+#permutation_table = [[-1, -1, -1, -1],
+#					 [-1, -1, -1, -1]]
 # --> 2 at the front is kinda forced due to ct and initial ordering of the deck
 
-pt_array = [0, -1, -1, -1]
+#pt_array = [-1, -1, -1, -1]
 # --> corresponds to line 0 in perm table
 
 #prop_down(pt_array, permutation_table, deck, line = 2)
 # --> line = 2 because we have already set line 1
 
-percolate_down(pt_array, permutation_table, deck, current_pos = 2)
+#percolate_down(pt_array, permutation_table, deck, current_pos = 1)
+#percolate_up(pt_array, permutation_table, deck, current_pos = 3, target_ct_letter_pos = 0, return_line = 4)
+
+# I think it may work now...
+
+def make_starting_configuration(pt_alphabet_size, ct_alphabet_size, ct_array):
+	pt_array = [-1 for i in ct_array]
+	permutation_table = [[-1 for i in range(ct_alphabet_size)] for j in range(pt_alphabet_size)]
+	deck = [[i for i in range(ct_alphabet_size)]]
+	deck += [[j if i == 0 else -1 for i in range(ct_alphabet_size)] for j in ct_array]
+
+	return pt_array, permutation_table, deck
+
+def update_permutation_table(permutation_table):
+	# if there is a row with just a single unset (-1) value, then fill it with the remaining value
+	for i, row in enumerate(permutation_table):
+		if row.count(-1) == 1:
+			replacement_value = len(row)-1
+			for j, v in enumerate(sorted(row)[1:]):
+				if v != j:
+					replacement_value = j
+					break
+			permutation_table[i] = list(map(lambda x: replacement_value if x == -1 else x, permutation_table[i]))
+	return permutation_table
+
+
+def update_deck(pt_array, permutation_table, deck):
+	#print("Deck:")
+	#print(deck)
+	new_deck = copy.deepcopy(deck)
+	
+	for j, pt_letter in enumerate(pt_array):
+		if pt_letter == -1: continue
+
+		perm = permutation_table[pt_letter]
+		validation_deck_state = []
+		for i, v in enumerate(perm):
+			if v == -1:
+				validation_deck_state += [-1]
+			else:
+				validation_deck_state += [new_deck[j][v]]
+		#print(new_deck[j+1])
+		#print(validation_deck_state)
+		for i, (a, b) in enumerate(zip(new_deck[j+1], validation_deck_state)):
+			if a == -1 and b != -1: new_deck[j+1][i] = b
+
+	#print("New deck:")
+	#print(new_deck)
+	return new_deck
+
+def recalculate_deck(pt_array, permutation_table, deck):
+	validation_deck_state = deck[0] # ensure same initial ordering
+	validation_deck = [validation_deck_state]
+	
+	for pt_letter in pt_array:
+		if pt_letter == -1: validation_deck += [[-1 for i in range(len(permutation_table[0]))]]; continue
+		perm = permutation_table[pt_letter]
+		next_validation_deck_state = []
+		for i in perm:
+			if i == -1:
+				next_validation_deck_state += [-1]
+			else:
+				next_validation_deck_state += [validation_deck_state[i]]
+
+		validation_deck_state = next_validation_deck_state
+		validation_deck += [validation_deck_state]
+	return validation_deck
+
+def validate_solution(pt_array, permutation_table, deck):
+	validation_deck = recalculate_deck(pt_array, permutation_table, deck)
+	print(np.array(validation_deck, dtype = int))
+
+
+debug = False
+pt_alphabet_size = 2
+ct_alphabet_size = 4
+ct_array = [2, 3, 0, 0, 1, 2, 3]
+pt_array, permutation_table, deck = make_starting_configuration(pt_alphabet_size, ct_alphabet_size, ct_array)
+percolate_down(pt_array, permutation_table, deck, current_pos = 1)
+print("Failure! No answer found.")
+
+
+# todo: when we update perm_table, we should probably recalculate the deck evolution as well because it may block parts later
+# --> done
+# at that point we could also do inference like when only a single value is not set in a permutation table, the last value is forced
+# --> done
+
+# sanity check: is 2,3,0,0,1,2,3 with ctsize = 4 and ptsize = 2 UNSAT?
+
+# next to do step:
+# - more testing
+# - how to deal with parallel ciphertexts?
+# ---> maybe have a function that checks if a permutation table as given cannot decrypt a ct?
+# ---> not sure how I would do that...
