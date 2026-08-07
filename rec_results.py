@@ -28,5 +28,15 @@ import deckcipher as dc
 import numpy as np
 ct_array_reconstructed_east1 = dc.encrypt(np.array(pt_array_east1, dtype = int), np.array(permutation_table_east1, dtype = int))
 
+print("pt array:")
+print(pt_array_east1)
+print("sparse permutation_table:")
+#print(sparse_permutation_table_east1[:9])
+print(sparse_permutation_table_east1)
+print("permutation_table:")
+#print(permutation_table_east1[:9])
+print(permutation_table_east1)
+print("reconstructed ct:")
 print(ct_array_reconstructed_east1 )
+print("original ct:")
 print(np.array(ct_array_east1, dtype = int))
