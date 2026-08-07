@@ -266,13 +266,26 @@ def recalculate_deck(pt_array, permutation_table, deck):
 
 def validate_solution(pt_array, permutation_table, deck):
 	validation_deck = recalculate_deck(pt_array, permutation_table, deck)
-	print(np.array(validation_deck, dtype = int))
+	#print(np.array(validation_deck, dtype = int))
 
+	print(f"{permutation_table = }")
+	print(f"{pt_array = }")
+
+
+import sys
+print(sys.getrecursionlimit())
+sys.setrecursionlimit(10000)
 
 debug = False
-pt_alphabet_size = 2
-ct_alphabet_size = 4
-ct_array = [2, 3, 0, 0, 1, 2, 3]
+#pt_alphabet_size = 2
+#ct_alphabet_size = 4
+#ct_array = [2, 3, 0, 0, 1, 2, 3]
+
+pt_alphabet_size = 26
+ct_alphabet_size = 83
+ct_array = [50, 66, 5, 48, 62, 13, 75, 29, 24, 61, 42, 70, 66, 62, 32, 14, 81, 8, 15, 78, 2, 29, 13, 49, 1, 80, 82, 40, 63, 81, 21, 19, 0, 40, 51, 65, 26, 14, 21, 70, 47, 44, 48, 42, 19, 48, 13, 47, 19, 49, 72, 31, 5, 24, 3, 43, 59, 67, 33, 49, 41, 60, 21, 26, 30, 5, 25, 20, 71, 11, 74, 56, 4, 74, 19, 71, 4, 51, 41, 43, 80, 72, 54, 63, 79, 81, 15, 16, 44, 31, 30, 12, 33, 57, 28, 13, 64, 43, 48]
+
+
 pt_array, permutation_table, deck = make_starting_configuration(pt_alphabet_size, ct_alphabet_size, ct_array)
 percolate_down(pt_array, permutation_table, deck, current_pos = 1)
 print("Failure! No answer found.")
@@ -290,3 +303,5 @@ print("Failure! No answer found.")
 # - how to deal with parallel ciphertexts?
 # ---> maybe have a function that checks if a permutation table as given cannot decrypt a ct?
 # ---> not sure how I would do that...
+
+
