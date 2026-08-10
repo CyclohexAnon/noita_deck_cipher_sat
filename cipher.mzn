@@ -1,10 +1,10 @@
 include "globals.mzn";
 
-int: pt_len = 4;
-int: pt_alphabet_size = 3;
-int: ct_alphabet_size = 4;
+int: pt_len = 17;
+int: pt_alphabet_size = 8;
+int: ct_alphabet_size = 11;
 
-array[1..pt_len] of int: ct = [1, 0, 2, 2];
+array[1..pt_len] of int: ct = [5, 8, 7, 2, 5, 4, 10, 6, 0, 4, 3, 7, 4, 1, 8, 5, 6];
 array[1..pt_len] of var 0..(pt_alphabet_size-1): pt;
 
 set of int: pt_alphabet = 0..(pt_alphabet_size-1);
