@@ -1,23 +1,21 @@
 import deckcipher as dc
+import eye_data as eyes
 
-pt_alphabet = "abcdefgh"
-ct_alphabet = "ABCDEFGHIJKLMN"
-pt_alphabet_size = len(pt_alphabet)
-ct_alphabet_size = len(ct_alphabet)
+#pt_alphabet = "abcdefgh"
+#ct_alphabet = "ABCDEFGHIJKLMN"
+#pt_alphabet_size = len(pt_alphabet)
+#ct_alphabet_size = len(ct_alphabet)
+#permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
+#print("Permutation table:")
+#print(permutation_table)
+#pts = ["abgcaefbgcabc", "hcabagbbah", "abcedfghab"]
+#pt_arrays = list(map(lambda p: dc.str_to_array(p, pt_alphabet), pts))
+#ct_arrays = list(map(lambda p: dc.encrypt(p, permutation_table), pt_arrays))
+#pt_lens = list(map(len, ct_arrays))
 
-permutation_table = dc.get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
-
-print("Permutation table:")
-print(permutation_table)
-
-#pt = "abcabcabc"
-#pt_array = dc.str_to_array(pt, pt_alphabet)
-#ct_array = dc.encrypt(pt_array, permutation_table)
-#pt_len = len(ct_array)
-
-pts = ["abgcaefbgcabc", "hcabagbbah", "abcedfghab"]
-pt_arrays = list(map(lambda p: dc.str_to_array(p, pt_alphabet), pts))
-ct_arrays = list(map(lambda p: dc.encrypt(p, permutation_table), pt_arrays))
+pt_alphabet_size = 26
+ct_alphabet_size = 83
+ct_arrays = [eyes.east_1, eyes.west_1, eyes.east_2, eyes.west_2, eyes.east_3, eyes.west_3, eyes.east_4, eyes.west_4, eyes.east_5]
 pt_lens = list(map(len, ct_arrays))
 
 with open("minizinc_cipher.mzn", "w") as f:
@@ -25,7 +23,7 @@ with open("minizinc_cipher.mzn", "w") as f:
 	f.write(f'int: pt_alphabet_size = {pt_alphabet_size};\n')
 	f.write(f'int: ct_alphabet_size = {ct_alphabet_size};\n')
 
-	for i in range(len(pts)):
+	for i in range(len(ct_arrays)):
 		ct_array = ct_arrays[i]
 		pt_len = pt_lens[i]
 
@@ -41,7 +39,7 @@ with open("minizinc_cipher.mzn", "w") as f:
 	# first column has unique entries
 	f.write(f'constraint all_different([permutation_table[p, 0] | p in pt_alphabet]);\n')
 
-	for i in range(len(pts)):
+	for i in range(len(ct_arrays)):
 		f.write(f'array[0..pt_len_{i}, ct_alphabet] of var 0..(ct_alphabet_size-1): deck_{i};\n')
 		# first deck state is ordered
 		f.write(f'constraint forall(c in ct_alphabet)(deck_{i}[0, c] = c);\n')
