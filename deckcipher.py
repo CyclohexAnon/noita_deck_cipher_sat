@@ -184,13 +184,13 @@ def get_permutation_table_with_swaps(ct_deck_size, pt_deck_size, seed = None, do
 
 
 if __name__ == "__main__":
-	#pt = "abcbabgacddghfadb"
-	#pt_alphabet = "abcdefgh"
-	#ct_alphabet = "ABCDEFGHIJK"
+	pt = "abcabbca"
+	pt_alphabet = "abc"
+	ct_alphabet = "ABCDE"
 
-	pt = "this a very secret message and this a very secret message"
-	pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
-	ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	#pt = "this a very secret message and this a very secret message"
+	#pt_alphabet = "abcdefghijklmnopqrstuvwxyz "
+	#ct_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 	permutation_table = get_permutation_table(len(ct_alphabet), len(pt_alphabet), seed = 0, double_free = True)
 	#permutation_table = get_permutation_table_with_swaps(len(ct_alphabet), len(pt_alphabet), seed = 1, double_free = False, swaps_from_parent = 3)
