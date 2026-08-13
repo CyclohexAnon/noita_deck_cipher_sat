@@ -34,6 +34,28 @@ def get_cnf_permutation(perm_length, offset = 0):
 
 	return num_var, num_clauses, clauses
 
+def get_cnf_permutation_vector(perm_length, offset = 0):
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	code = lambda x: x + 1 + offset
+
+	# at least one entry is true
+	clauses += [[code(i) for i in range(perm_length)] + [0]]
+	num_clauses += 1
+
+	# between every pair, at most one selector is true
+	for i in range(perm_length):
+		for j in range(i + 1, perm_length):
+			clauses += [[-code(i), -code(j), 0]]
+			num_clauses += 1
+
+	num_var = perm_length
+
+	return num_var, num_clauses, clauses
+
+
 def get_cnf_pt_selector(pt_alphabet_size, offset = 0):
 	code = lambda x: x + 1 + offset
 
@@ -77,10 +99,10 @@ def get_cnf_permutation_product(perm_length, offset1, offset2, offset3):
 
 	return num_var, num_clauses, clauses
 
-def get_cnf_permutation_product_with_vector(perm_length, offset1, offsets2, offsets3):
+def get_cnf_permutation_product_with_vector(perm_length, offset1, offset2, offset3):
 	# offset1 is for the first factor matrix
-	# offsets2[] is for the row vector (also length perm_length)
-	# offsets3[] is for the result vector (also length perm_length)
+	# offset2 is for the row vector (also length perm_length)
+	# offset3 is for the result vector (also length perm_length)
 	# assumes all three already exist
 
 	num_var = 0
@@ -98,8 +120,8 @@ def get_cnf_permutation_product_with_vector(perm_length, offset1, offsets2, offs
 	#			num_clauses += 1
 
 	code1 = lambda x, y: x*perm_length + y + 1 + offset1
-	code2 = lambda x: offsets2[x] + 1
-	code3 = lambda x: offsets3[x] + 1
+	code2 = lambda x: offset2 + x + 1
+	code3 = lambda x: offset3 + x + 1
 
 	for i in range(perm_length):
 		for k in range(perm_length):
@@ -132,19 +154,19 @@ def get_cnf_selector_permutation_product(perm_length, selectors, offsets1, offse
 
 	return num_var, num_clauses, clauses
 
-def get_cnf_selector_permutation_product_with_vector(perm_length, selectors, offsets1, offsets2, offsets3):
+def get_cnf_selector_permutation_product_with_vector(perm_length, selectors, offsets1, offset2, offset3):
 	# selectors is a list of codes for the selecting variables
 	# offsets1 is a list of offsets for the first factor
-	# offsets2[] is for the row vector (also length perm_length)
-	# offsets3[] is for the result vector (also length perm_length)
+	# offset2 is for the row vector (also length perm_length)
+	# offset3 is for the result vector (also length perm_length)
 	# assumes all three already exist
 
 	num_var = 0
 	num_clauses = 0
 	clauses = []
 
-	code2 = lambda x: offsets2[x] + 1
-	code3 = lambda x: offsets3[x] + 1
+	code2 = lambda x: x + offset2 + 1
+	code3 = lambda x: x + offset3 + 1
 
 	for n, offset1 in enumerate(offsets1):
 		code1 = lambda x, y: x*perm_length + y + 1 + offset1  
@@ -674,17 +696,18 @@ def solve_sparse(ct, ct_alphabet):
 	# basically the same as solve but we omit lower columns (cards) that dont matter anymore,
 	# e.g. in this arbitrary deck evolution:
 	#
-	# 0 1 2 3 4
-	# 1 2 3 . .
-	# 2 1 3 . .
-	# 1 3 . . .
-	# 3 . . . .
+	# 0 1 2 3 4        0 1 2 3 4
+	# 1 2 3 . .        1 3 . . 2
+	# 2 1 3 . .   or   2 . . 1 3   or   ...
+	# 1 3 . . .        1 . . 3 .
+	# 3 . . . .        3 . . . .
 	# 
 	# we dont actually care where 1 or 2 etc. are in the last deck state, and we dont care about most cards in the previous deck states either --> we can save on clauses and vars and dont actually permute those unused cards
 	# but we do need the initial deck state
 
 	ct_array = dc.str_to_array(ct, ct_alphabet)
 	ct_alphabet_size = len(ct_alphabet)
+
 
 
 	# find out what cards are actually needed per deck state
@@ -699,6 +722,110 @@ def solve_sparse(ct, ct_alphabet):
 	# --> probably good to make a second list of exactly the same size and subsizes that hold the offsets
 
 	# TODO: Continue
+
+
+	permutations = []
+
+	# explanation about the term offset: the variables count up in order with every new addition, therefore later permutation matrices must be "offset" to account for the already used variables
+
+	total_var = lambda: sum([d["num_var"] for d in permutations]) # total number of variables
+	total_clauses = lambda: sum([d["num_clauses"] for d in permutations]) # total number of clauses
+	all_clauses = lambda: [x for d in permutations for x in d["clauses"]] # all clauses concatenated together
+	def perm_matrix_indices(): # get a list with the indices of all permutation matrices in the list "permutations"
+		ind = []
+		for i, d in enumerate(permutations):
+			if d["type"].startswith("perm_matrix"): ind += [i]
+		return ind
+	perm_matrix_offset = lambda n: permutations[perm_matrix_indices()[n]]["offset"] # for the nth permutation matrix in the list "permutations" return the variable offset
+	perm_matrix_offsets = lambda: [permutations[perm_matrix_indices()[n]]["offset"] for n in range(len(perm_matrix_indices()))] # for all the permutation matrices in the list "permutations" return their variable offset
+
+	# create permutation matrices for each plain text letter
+	if debug: print("Creating permutation matrices for pt letters...")
+	for i in range(pt_alphabet_size):
+		num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+		permutations += [{"type": "perm_matrix", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	pt_letter_permutation_matrix_offsets = perm_matrix_offsets()
+
+	# create the deck
+	#if debug: print("Creating permutation matrix for the deck...")
+	#num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+	#permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	# set deck in an ordered state
+	#if debug: print("Setting initial ordering of the deck...")
+	#num_var, num_clauses, clauses = get_cnf_permutation_as_identity(perm_length, offset = perm_matrix_offset(pt_alphabet_size))
+	#permutations += [{"type": "constraint_identity_matrix", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+
+	# create the states of the shuffled deck
+	#if debug: print("Creating permutation matrices for states of the deck...")
+	#for i in range(pt_length):
+	#	num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+	#	permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+	# --> okay now we need to be more clever
+
+	# I think the concept now is to create permutation vectors instead, one vector for each letter we care about for each state of the deck
+	# The letters we care about are in needed_cards
+
+
+	deck_card_offsets = []
+	for i in range(len(needed_cards)):
+		# create the deck states
+		deck_card_offsets += [[]]
+		for card in needed_cards[i]:
+			# card is the cards we need
+			num_var, num_clauses, clauses = get_cnf_permutation_vector(perm_length, offset = total_var())
+			deck_card_offsets[-1] += [total_var()]
+			permutations += [{"type": f"perm_vector_layer{i}_card{card}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+	# set the inital deck in an ordered state
+	for i in range(len(needed_cards[0])):
+		card_offset = deck_card_offsets[0][i]
+		num_var, num_clauses, clauses = get_cnf_equality(card_offset + i + 1, val = True)
+		permutations += [{"type": "constraint_ordered_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+
+	
+	if use_known_pt:
+		# worry about this later
+		raise Exception("Not implemented yet")
+		pass
+
+	else:
+		# If we do not wish to use the plain text, we need to create an array to hold the reconstructed pt
+		if debug: print("Creating selectors for the pt...")
+		selector_offsets = []
+		for i in range(pt_length):
+			num_var, num_clauses, clauses = get_cnf_pt_selector(pt_alphabet_size, offset = total_var())
+			selector_offsets += [total_var()]
+			permutations += [{"type": "pt_selector", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+		if debug: print("Constraining the deck with the pt selectors...")
+		# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
+		#for i in range(pt_length):
+		#	num_var, num_clauses, clauses = get_cnf_selector_permutation_product(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
+		#	permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+		# --> here we need to instead do the vector multiplication
+
+		for i in range(len(needed_cards)):
+			for j in range(needed_cards[j]):
+				offset = deck_card_offsets[i][j]
+
+				num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1, offset2, offset3)
+
+				# uhhhh not sure if selector_offsets should start at zero probably one shorter
+
+
+
+
+
+
+
+
+
+
 
 
 
