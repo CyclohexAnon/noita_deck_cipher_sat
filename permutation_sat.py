@@ -77,6 +77,37 @@ def get_cnf_permutation_product(perm_length, offset1, offset2, offset3):
 
 	return num_var, num_clauses, clauses
 
+def get_cnf_permutation_product_with_vector(perm_length, offset1, offsets2, offsets3):
+	# offset1 is for the first factor matrix
+	# offsets2[] is for the row vector (also length perm_length)
+	# offsets3[] is for the result vector (also length perm_length)
+	# assumes all three already exist
+
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	#code1 = lambda x, y: x*perm_length + y + 1 + offset1
+	#code2 = lambda x, y: x*perm_length + y + 1 + offset2
+	#code3 = lambda x, y: x*perm_length + y + 1 + offset3
+
+	#for i in range(perm_length):
+	#	for j in range(perm_length):
+	#		for k in range(perm_length):
+	#			clauses += [[-code1(i, k), -code2(k, j), code3(i, j), 0]]
+	#			num_clauses += 1
+
+	code1 = lambda x, y: x*perm_length + y + 1 + offset1
+	code2 = lambda x: offsets2[x] + 1
+	code3 = lambda x: offsets3[x] + 1
+
+	for i in range(perm_length):
+		for k in range(perm_length):
+			clauses += [[-code1(i, k), -code2(k), code3(i), 0]]
+			num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
 def get_cnf_selector_permutation_product(perm_length, selectors, offsets1, offset2, offset3):
 	# selectors is a list of codes for the selecting variables
 	# offsets1 is a list of offsets for the first factor
@@ -91,7 +122,6 @@ def get_cnf_selector_permutation_product(perm_length, selectors, offsets1, offse
 	code2 = lambda x, y: x*perm_length + y + 1 + offset2
 	code3 = lambda x, y: x*perm_length + y + 1 + offset3
 
-	# TODO
 	for n, offset1 in enumerate(offsets1):
 		code1 = lambda x, y: x*perm_length + y + 1 + offset1  
 		for i in range(perm_length):
@@ -99,6 +129,29 @@ def get_cnf_selector_permutation_product(perm_length, selectors, offsets1, offse
 				for k in range(perm_length):
 					clauses += [[-(selectors[n] + 1), -code1(i, k), -code2(k, j), code3(i, j), 0]]
 					num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
+def get_cnf_selector_permutation_product_with_vector(perm_length, selectors, offsets1, offsets2, offsets3):
+	# selectors is a list of codes for the selecting variables
+	# offsets1 is a list of offsets for the first factor
+	# offsets2[] is for the row vector (also length perm_length)
+	# offsets3[] is for the result vector (also length perm_length)
+	# assumes all three already exist
+
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	code2 = lambda x: offsets2[x] + 1
+	code3 = lambda x: offsets3[x] + 1
+
+	for n, offset1 in enumerate(offsets1):
+		code1 = lambda x, y: x*perm_length + y + 1 + offset1  
+		for i in range(perm_length):
+			for k in range(perm_length):
+				clauses += [[-(selectors[n] + 1), -code1(i, k), -code2(k), code3(i), 0]]
+				num_clauses += 1
 
 	return num_var, num_clauses, clauses
 
@@ -614,6 +667,42 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		# UNSATISFIABLE
 		return {"satisfiable" : False}
 
+
+def solve_sparse(ct, ct_alphabet):
+	pass
+
+	# basically the same as solve but we omit lower columns (cards) that dont matter anymore,
+	# e.g. in this arbitrary deck evolution:
+	#
+	# 0 1 2 3 4
+	# 1 2 3 . .
+	# 2 1 3 . .
+	# 1 3 . . .
+	# 3 . . . .
+	# 
+	# we dont actually care where 1 or 2 etc. are in the last deck state, and we dont care about most cards in the previous deck states either --> we can save on clauses and vars and dont actually permute those unused cards
+	# but we do need the initial deck state
+
+	ct_array = dc.str_to_array(ct, ct_alphabet)
+	ct_alphabet_size = len(ct_alphabet)
+
+
+	# find out what cards are actually needed per deck state
+	needed_cards = [[]]
+	for c in ct_array[::-1]:
+		temp = needed_cards[0].copy()
+		if c not in temp: temp += [c]
+		needed_cards = [sorted(temp)] + needed_cards
+	needed_cards = [list(range(ct_alphabet_size))] + needed_cards[:-1]
+	# --> needed cards now contains all the needed cards from state 0 to the final state of the deck
+	# --> we need to keep track of them for the deck evolution
+	# --> probably good to make a second list of exactly the same size and subsizes that hold the offsets
+
+	# TODO: Continue
+
+
+
+
 def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, permutation_table_reconstructed = None, reconstructed_pt = None, satisfiable = None, parent_permutation = None, use_multiple_ct = False, other_cts = [], other_reconstructed_pts = [], other_pts = []):
 	if parent_permutation is not None:
 		print("Parent permutation:")
@@ -958,7 +1047,7 @@ if __name__ == "__main__":
 	#fun5_reconstruct_pt_with_limited_transpositions()
 	#fun6_solve_parallel_ct()
 	#fun7_test_cnf_size()
-	fun8_another_parallel_solve()
+	#fun8_another_parallel_solve()
 
 	#pt_alphabet = "abcd"
 	#ct_alphabet = "ABCDEFG"
@@ -966,6 +1055,7 @@ if __name__ == "__main__":
 	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True)
 	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
 
+	solve_sparse("ABCABC", "ABCD")
 
 
 	
