@@ -747,6 +747,11 @@ def solve_sparse(ct, ct_alphabet):
 
 	pt_letter_permutation_matrix_offsets = perm_matrix_offsets()
 
+	# constrain the pt permutation matrices to map to unique letters
+	if debug: print("Constraining the pt matrices to have unique top cards...")
+	num_var, num_clauses, clauses = get_cnf_unique_top_card(perm_length, offsets = pt_letter_permutation_matrix_offsets)
+	permutations += [{"type": "constraint_unique_top_card", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
 	# create the deck
 	#if debug: print("Creating permutation matrix for the deck...")
 	#num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
@@ -810,10 +815,17 @@ def solve_sparse(ct, ct_alphabet):
 		# --> here we need to instead do the vector multiplication
 
 		for i in range(len(needed_cards)):
-			for j in range(needed_cards[j]):
-				offset = deck_card_offsets[i][j]
+			for j in range(len(needed_cards[i])):
+				current_offset = deck_card_offsets[i][j]
 
-				num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1, offset2, offset3)
+				# find offset of card in the next layer
+				next_cards = needed_cards[i+1]
+				if needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
+				next_offset = deck_card_offsets[i+1][next_cards.index(needed_cards[i][j])]
+
+				# contstrain as selector x permutation x old_card = new_card
+				num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
+				permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 				# uhhhh not sure if selector_offsets should start at zero probably one shorter
 
