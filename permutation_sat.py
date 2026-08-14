@@ -55,6 +55,22 @@ def get_cnf_permutation_vector(perm_length, offset = 0):
 
 	return num_var, num_clauses, clauses
 
+def get_cnf_permutation_vector_constraints(perm_length, offsets = []):
+	# no two rows can be the same
+	num_var = 0
+	num_clauses = 0
+	clauses = []
+
+	code = lambda x, y: offsets[y] + 1 + x
+
+	for i in range(perm_length):
+		for j in range(len(offsets)):
+			for k in range(j + 1, len(offsets)):
+				clauses += [[-code(i, j), -code(i, k), 0]]
+				num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
 
 def get_cnf_pt_selector(pt_alphabet_size, offset = 0):
 	code = lambda x: x + 1 + offset
@@ -690,7 +706,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		return {"satisfiable" : False}
 
 
-def solve_sparse(ct, ct_alphabet):
+def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False):
 	pass
 
 	# basically the same as solve but we omit lower columns (cards) that dont matter anymore,
@@ -705,10 +721,13 @@ def solve_sparse(ct, ct_alphabet):
 	# we dont actually care where 1 or 2 etc. are in the last deck state, and we dont care about most cards in the previous deck states either --> we can save on clauses and vars and dont actually permute those unused cards
 	# but we do need the initial deck state
 
+	if pt is not None: pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.str_to_array(ct, ct_alphabet)
 	ct_alphabet_size = len(ct_alphabet)
+	pt_alphabet_size = len(pt_alphabet)
 
-
+	pt_length = len(ct) # using ct here to get the length because pt and ct have the same length anyways and ct is always given
+	perm_length = ct_alphabet_size
 
 	# find out what cards are actually needed per deck state
 	needed_cards = [[]]
@@ -722,6 +741,8 @@ def solve_sparse(ct, ct_alphabet):
 	# --> probably good to make a second list of exactly the same size and subsizes that hold the offsets
 
 	# TODO: Continue
+	print(f"{len(ct_array) = }")
+	print(f"{len(needed_cards) = }")
 
 
 	permutations = []
@@ -791,6 +812,11 @@ def solve_sparse(ct, ct_alphabet):
 		permutations += [{"type": "constraint_ordered_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 
+	# add constraint that no two deck cards per state can be in the same position
+	for i in range(len(needed_cards)):
+		num_var, num_clauses, clauses = get_cnf_permutation_vector_constraints(perm_length, offsets = deck_card_offsets[i])
+		permutations += [{"type": "constraint_no_same_card_pos", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
 	
 	if use_known_pt:
 		# worry about this later
@@ -814,7 +840,7 @@ def solve_sparse(ct, ct_alphabet):
 
 		# --> here we need to instead do the vector multiplication
 
-		for i in range(len(needed_cards)):
+		for i in range(len(needed_cards)-1):
 			for j in range(len(needed_cards[i])):
 				current_offset = deck_card_offsets[i][j]
 
@@ -829,11 +855,48 @@ def solve_sparse(ct, ct_alphabet):
 
 				# uhhhh not sure if selector_offsets should start at zero probably one shorter
 
+		# constrain the top card
+		for i in range(pt_length):
+			ct_letter = ct_array[i]
+
+			card_offsets = deck_card_offsets[i+1]
+			cards = needed_cards[i+1]
+
+			offset = card_offsets[cards.index(ct_letter)]
+
+			num_var, num_clauses, clauses =  get_cnf_equality(offset + 1, val = True)
+			permutations += [{"type": "constraint_ct_letter", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 
 
 
+	if debug: print("Writing CNF...")
+	with open("permutation_test.cnf", "w") as f:
+		f.write(f"p cnf {total_var()} {total_clauses()}\n")
+		ac = all_clauses()
+		for clause in ac:
+			f.write(" ".join(list(map(str, clause))) + "\n")
 
+	#print(clauses)
+
+	if write_cnf_then_exit:
+		print("Written CNF, exiting...")
+		return {}
+
+	if debug: print("Running kissat...")
+	subprocess.run(["./run_kissat_permutation.sh"])
+
+	if debug: print("Results:")
+	with open("permutation_test_result.txt", "r") as f:
+		lines = f.readlines()
+		result = ""
+		expression = ""
+		for line in lines:
+			if line[0] == "s": result = line[2:].strip()
+			if line[0] == "v": expression += line[2:].strip() + " "
+
+	if debug: print(result)
+	if debug: print(expression)
 
 
 
@@ -1194,7 +1257,11 @@ if __name__ == "__main__":
 	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True)
 	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
 
-	solve_sparse("ABCABC", "ABCD")
-
+	
+	pt_alphabet = "abcd"
+	ct_alphabet = "ABCDEFG"
+	ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
+	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, write_cnf_then_exit = False)
+	#solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, write_cnf_then_exit = True)
 
 	
