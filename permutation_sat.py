@@ -706,16 +706,16 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		return {"satisfiable" : False}
 
 
-def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False):
+def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, cribs = [], other_cribs = []):
 
 	# basically the same as solve but we omit lower columns (cards) that dont matter anymore,
 	# e.g. in this arbitrary deck evolution:
 	#
-	# 0 1 2 3 4        0 1 2 3 4
-	# 1 2 3 . .        1 3 . . 2
-	# 2 1 3 . .   or   2 . . 1 3   or   ...
-	# 1 3 . . .        1 . . 3 .
-	# 3 . . . .        3 . . . .
+	#   0 1 2 3 4        0 1 2 3 4
+	#   1 2 3 . .        1 3 . . 2
+	#   2 1 3 . .   or   2 . . 1 3   or   ...
+	#   1 3 . . .        1 . . 3 .
+	#   3 . . . .        3 . . . .
 	# 
 	# we dont actually care where 1 or 2 etc. are in the last deck state, and we dont care about most cards in the previous deck states either --> we can save on clauses and vars and dont actually permute those unused cards
 	# but we do need the initial deck state
@@ -723,9 +723,11 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	# I want an option for a canonical pt or partially canonical pt...
 	# --> lazy_canonical_pt
 
-	## Next todo: use_known_pt, cribs
-	# cribs and lazy_canonical_pt are mutually exclusive, throw error if both set
+	## Next todo: other_cribs for the other pts if given
 
+	# cribs and lazy_canonical_pt are mutually exclusive, throw error if both set
+	if len(cribs) + len(other_cribs) > 0 and lazy_canonical_pt:
+		raise Exception("Cribs and using a canonicalized pt are mutually exclusive!")
 
 	if pt is not None: pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.str_to_array(ct, ct_alphabet)
@@ -734,6 +736,22 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 
 	pt_length = len(ct) # using ct here to get the length because pt and ct have the same length anyways and ct is always given
 	perm_length = ct_alphabet_size
+
+	# -1 implies unknown
+	crib_array = [-1 for i in range(pt_length)]
+	for d in cribs:
+		for i in range(len(d["val"])):
+			crib_array[d["pos"] + i] = pt_alphabet.index(d["val"][i])
+
+	other_crib_arrays = []
+	for j in range(len(other_cts)):
+		temp_crib_array = [-1 for i in range(pt_length)]
+		if j < len(other_cribs):
+			oc = other_cribs[j]
+			for d in oc:
+				for i in range(len(d["val"])):
+					temp_crib_array[d["pos"] + i] = pt_alphabet.index(d["val"][i])
+		other_crib_arrays += [temp_crib_array]
 
 	# find out what cards are actually needed per deck state
 	needed_cards = [[]]
@@ -869,6 +887,13 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 					num_var, num_clauses, clauses =  get_cnf_equality(offset + 1, val = False)
 					permutations += [{"type": "constraint_lazy_canonical_pt", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
+		# process cribs
+		if debug: print("Adding cribs...")
+		for i, crib in enumerate(crib_array):
+			if crib == -1: continue
+			num_var, num_clauses, clauses = get_cnf_equality(selector_offsets[i] + crib + 1)
+			permutations += [{"type": "constraint_crib", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
 
 	# if we are given multiple cipher texts, we want to have another deck, plaintext selectors, etc., but reuse the plaintext permutation matrices (so one permutation table has to decrypt multiple messages)
 	if use_multiple_ct:
@@ -952,8 +977,12 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 				num_var, num_clauses, clauses =  get_cnf_equality(offset + 1, val = True)
 				permutations += [{"type": "constraint_ct_letter", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
-
-
+			# process cribs
+			if debug: print("Adding cribs...")
+			for i, crib in enumerate(other_crib_arrays[ct_number]):
+				if crib == -1: continue
+				num_var, num_clauses, clauses = get_cnf_equality(other_selector_offsets[i] + crib + 1)
+				permutations += [{"type": "constraint_crib", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 
 	if debug: print("Writing CNF...")
@@ -1422,7 +1451,7 @@ def fun10_solve_sparse_parallel_ct():
 	ct2_array = dc.encrypt(pt2_array, permutation_table)
 	ct2 = dc.array_to_str(ct2_array, ct_alphabet)
 
-	pt3 = "bdbadccbdbccabdcdd"
+	pt3 = "cbdbadccbdbccabdcdd"
 	pt3_array = dc.str_to_array(pt3, pt_alphabet)
 	ct3_array = dc.encrypt(pt3_array, permutation_table)
 	ct3 = dc.array_to_str(ct3_array, ct_alphabet)
@@ -1431,7 +1460,7 @@ def fun10_solve_sparse_parallel_ct():
 	print(ct2)
 	print(ct3)
 
-	result = solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = True, other_cts = [ct2, ct3], lazy_canonical_pt = True)
+	result = solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = True, other_cts = [ct2, ct3], lazy_canonical_pt = False, cribs = [{"pos" : 1, "val": "bdb"}], other_cribs = [[{"pos" : 0, "val": "bdba"}], [{"pos" : 2, "val": "dba"}]])
 	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, use_multiple_ct = True, other_cts = [ct2, ct3], other_pts = [pt2, pt3], **result)
 
 
