@@ -706,8 +706,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		return {"satisfiable" : False}
 
 
-def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False):
-	pass
+def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False):
 
 	# basically the same as solve but we omit lower columns (cards) that dont matter anymore,
 	# e.g. in this arbitrary deck evolution:
@@ -720,6 +719,13 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	# 
 	# we dont actually care where 1 or 2 etc. are in the last deck state, and we dont care about most cards in the previous deck states either --> we can save on clauses and vars and dont actually permute those unused cards
 	# but we do need the initial deck state
+
+	# I want an option for a canonical pt or partially canonical pt...
+	# --> lazy_canonical_pt
+
+	## Next todo: use_known_pt, cribs
+	# cribs and lazy_canonical_pt are mutually exclusive, throw error if both set
+
 
 	if pt is not None: pt_array = dc.str_to_array(pt, pt_alphabet)
 	ct_array = dc.str_to_array(ct, ct_alphabet)
@@ -743,6 +749,14 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	# TODO: Continue
 	print(f"{len(ct_array) = }")
 	print(f"{len(needed_cards) = }")
+
+
+	if use_multiple_ct:
+		list_other_ct_arrays = []
+		list_other_pt_lengths = []
+		for c in other_cts:
+			list_other_ct_arrays += [dc.str_to_array(c, ct_alphabet)]
+			list_other_pt_lengths += [len(c)]
 
 
 	permutations = []
@@ -773,28 +787,10 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	num_var, num_clauses, clauses = get_cnf_unique_top_card(perm_length, offsets = pt_letter_permutation_matrix_offsets)
 	permutations += [{"type": "constraint_unique_top_card", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
-	# create the deck
-	#if debug: print("Creating permutation matrix for the deck...")
-	#num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
-	#permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
-
-	# set deck in an ordered state
-	#if debug: print("Setting initial ordering of the deck...")
-	#num_var, num_clauses, clauses = get_cnf_permutation_as_identity(perm_length, offset = perm_matrix_offset(pt_alphabet_size))
-	#permutations += [{"type": "constraint_identity_matrix", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
-
-
-	# create the states of the shuffled deck
-	#if debug: print("Creating permutation matrices for states of the deck...")
-	#for i in range(pt_length):
-	#	num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
-	#	permutations += [{"type": "perm_matrix_deck", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
-	# --> okay now we need to be more clever
-
 	# I think the concept now is to create permutation vectors instead, one vector for each letter we care about for each state of the deck
 	# The letters we care about are in needed_cards
 
-
+	if debug: print("Creating permutation vectors for needed cards...")
 	deck_card_offsets = []
 	for i in range(len(needed_cards)):
 		# create the deck states
@@ -834,10 +830,6 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 
 		if debug: print("Constraining the deck with the pt selectors...")
 		# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
-		#for i in range(pt_length):
-		#	num_var, num_clauses, clauses = get_cnf_selector_permutation_product(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = perm_matrix_offset(pt_alphabet_size + i), offset3 = perm_matrix_offset(pt_alphabet_size + i + 1))
-		#	permutations += [{"type": "constraint_perm_matrix_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
-
 		# --> here we need to instead do the vector multiplication
 
 		for i in range(len(needed_cards)-1):
@@ -866,6 +858,100 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 
 			num_var, num_clauses, clauses =  get_cnf_equality(offset + 1, val = True)
 			permutations += [{"type": "constraint_ct_letter", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+		# lazily canonicalize pt
+		# set upper right triangle in pt selectors to false because it is possible WLOG
+		if lazy_canonical_pt:
+			for i in range(min(pt_alphabet_size-1, pt_length)):
+				#print("DEBUG-------------------!")
+				set_to_zero = list(range(selector_offsets[i] + i + 1, selector_offsets[i] + pt_alphabet_size))
+				for offset in set_to_zero:
+					num_var, num_clauses, clauses =  get_cnf_equality(offset + 1, val = False)
+					permutations += [{"type": "constraint_lazy_canonical_pt", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+
+	# if we are given multiple cipher texts, we want to have another deck, plaintext selectors, etc., but reuse the plaintext permutation matrices (so one permutation table has to decrypt multiple messages)
+	if use_multiple_ct:
+		if debug: print("Processing additional cts...")
+		all_other_selector_offsets = []
+		for ct_number, other_ct_array in enumerate(list_other_ct_arrays):
+			print(f"Processing additional ct {ct_number+1}/{len(list_other_ct_arrays)}...")
+
+			other_pt_length = list_other_pt_lengths[ct_number]
+
+			other_needed_cards = [[]]
+			for c in other_ct_array[::-1]:
+				temp = other_needed_cards[0].copy()
+				if c not in temp: temp += [c]
+				other_needed_cards = [sorted(temp)] + other_needed_cards
+			other_needed_cards = [list(range(ct_alphabet_size))] + other_needed_cards[:-1]
+
+			# create the deck
+			# create the states of the shuffled deck
+			if debug: print("Creating permutation vectors for needed cards...")
+
+			other_deck_card_offsets = []
+			for i in range(len(other_needed_cards)):
+				# create the deck states
+				other_deck_card_offsets += [[]]
+				for card in other_needed_cards[i]:
+					# card is the cards we need
+					num_var, num_clauses, clauses = get_cnf_permutation_vector(perm_length, offset = total_var())
+					other_deck_card_offsets[-1] += [total_var()]
+					permutations += [{"type": f"perm_vector_ct{ct_number}_layer{i}_card{card}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# set the inital deck in an ordered state
+			for i in range(len(other_needed_cards[0])):
+				card_offset = other_deck_card_offsets[0][i]
+				num_var, num_clauses, clauses = get_cnf_equality(card_offset + i + 1, val = True)
+				permutations += [{"type": f"constraint_ordered_deck_ct{ct_number}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# add constraint that no two deck cards per state can be in the same position
+			for i in range(len(other_needed_cards)):
+				num_var, num_clauses, clauses = get_cnf_permutation_vector_constraints(perm_length, offsets = other_deck_card_offsets[i])
+				permutations += [{"type": "constraint_no_same_card_pos", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			# If we do not wish to use the plain text, we need to create an array to hold the reconstructed pt
+			if debug: print("Creating selectors for the pt...")
+			other_selector_offsets = []
+			for i in range(other_pt_length):
+				num_var, num_clauses, clauses = get_cnf_pt_selector(pt_alphabet_size, offset = total_var())
+				other_selector_offsets += [total_var()]
+				permutations += [{"type": f"pt_selector_ct{ct_number}", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+			all_other_selector_offsets += [other_selector_offsets]
+
+			# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
+			# --> here we need to instead do the vector multiplication
+
+			if debug: print("Constraining the deck with the pt selectors...")
+			for i in range(len(other_needed_cards)-1):
+				for j in range(len(other_needed_cards[i])):
+					current_offset = other_deck_card_offsets[i][j]
+
+					# find offset of card in the next layer
+					next_cards = other_needed_cards[i+1]
+					if other_needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
+					next_offset = other_deck_card_offsets[i+1][next_cards.index(other_needed_cards[i][j])]
+
+					# contstrain as selector x permutation x old_card = new_card
+					num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
+					permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+					# uhhhh not sure if selector_offsets should start at zero probably one shorter
+
+			if debug: print("Constraining the deck to the cipher text...")
+			# constrain the top card
+			for i in range(other_pt_length):
+				ct_letter = other_ct_array[i]
+
+				card_offsets = other_deck_card_offsets[i+1]
+				cards = other_needed_cards[i+1]
+
+				offset = card_offsets[cards.index(ct_letter)]
+
+				num_var, num_clauses, clauses =  get_cnf_equality(offset + 1, val = True)
+				permutations += [{"type": "constraint_ct_letter", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
 
 
 
@@ -899,7 +985,83 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	if debug: print(expression)
 
 
+	if result == "SATISFIABLE":
+		permutation_table_reconstructed = np.empty((pt_alphabet_size, ct_alphabet_size), dtype = int)
+		parent_permutation = None
+		selection_matrix = np.empty((pt_length, pt_alphabet_size), dtype = int)
 
+		sparse_deck = np.full((pt_length+1, ct_alphabet_size), -1, dtype = int)
+
+		code_to_pos = lambda v, offset: ((v-1-offset)//perm_length, (v-1-offset)%perm_length)
+		selector_code_to_pos = lambda v, offset: ((v-1-offset)//pt_alphabet_size, (v-1-offset)%pt_alphabet_size)
+
+		for i, p in enumerate(permutations):
+			if p["type"].startswith("perm_matrix"):		
+				permutation_matrix = np.empty((perm_length, perm_length), dtype = int)
+				for n in expression.strip().split(" "):
+					if abs(m := int(n)) < sum([d["num_var"] for d in permutations[:i+1]]) + 1 and abs(m) >= p["offset"] and m != 0:				
+						permutation_matrix[code_to_pos(abs(m), p["offset"])] = np.sign(m)
+
+				permutation = [np.nonzero(permutation_matrix[k] > 0)[0][0] for k in range(perm_length)]
+				if debug: print(f"permutation_{i}({p['type']}) = {list(map(int, permutation))}")
+
+				if p["type"] == "perm_matrix":
+					permutation_table_reconstructed[i] = permutation
+				elif p["type"] == "perm_matrix_parent":
+					parent_permutation = permutation
+
+			elif p["type"].startswith("perm_vector_layer"):
+				permutation_vector = np.empty(perm_length, dtype = int)
+				for n in expression.strip().split(" "):
+					if abs(m := int(n)) < sum([d["num_var"] for d in permutations[:i+1]]) + 1 and abs(m) >= p["offset"] and m != 0:				
+						permutation_vector[code_to_pos(abs(m), p["offset"])[1]] = np.sign(m)
+				pos = np.nonzero(permutation_vector > 0)[0][0]
+				#print(f"pos {p['type']} = {pos}")
+
+				layer, card = list(map(int, p["type"].replace("perm_vector_layer", "").replace("card", "").split("_")))
+				sparse_deck[layer, pos] = card
+
+		print("Reconstructed sparse deck:")
+		print(sparse_deck)
+
+		if not use_known_pt:
+			for n in expression.strip().split(" "):
+				if (m := int(n)) != 0 and abs(m) >= selector_offsets[0] and abs(m) <= (selector_offsets[-1] + pt_alphabet_size):	
+					selection_matrix[selector_code_to_pos(abs(m), selector_offsets[0])] = np.sign(m)
+
+		if use_multiple_ct:
+			all_selection_matrices = []
+			for i, selector_offsets_new_ct in enumerate(all_other_selector_offsets):
+				all_selection_matrices += [np.empty((list_other_pt_lengths[i], pt_alphabet_size), dtype = int)]
+				for n in expression.strip().split(" "):	
+					if (m := int(n)) != 0 and abs(m) >= selector_offsets_new_ct[0] and abs(m) <= (selector_offsets_new_ct[-1] + pt_alphabet_size):	
+						all_selection_matrices[i][selector_code_to_pos(abs(m), selector_offsets_new_ct[0])] = np.sign(m)
+
+		if use_known_pt:
+			return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "parent_permutation" : parent_permutation}
+
+		else:
+			# we need to use the reconstructed pt and the reconstructed permutation table to check
+			reconstructed_pt = ""
+			for row in selection_matrix:
+				reconstructed_pt += pt_alphabet[np.nonzero(row == 1)[0][0]]
+
+			if use_multiple_ct:
+				other_reconstructed_pts = []
+				for other_selection_matrix in all_selection_matrices:
+					other_reconstructed_pt = ""
+					for row in other_selection_matrix:
+						other_reconstructed_pt += pt_alphabet[np.nonzero(row == 1)[0][0]]
+					other_reconstructed_pts += [other_reconstructed_pt]
+
+				return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt, "parent_permutation" : parent_permutation, "other_reconstructed_pts" : other_reconstructed_pts}
+
+			else:
+				return {"satisfiable" : True, "permutation_table_reconstructed": permutation_table_reconstructed, "reconstructed_pt" : reconstructed_pt, "parent_permutation" : parent_permutation}
+		
+	else:
+		# UNSATISFIABLE
+		return {"satisfiable" : False}
 
 
 
@@ -1238,7 +1400,39 @@ def fun8_another_parallel_solve():
 	result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True, related_permutations = False, use_multiple_ct = True, other_cts = [ct2, ct3])
 	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, use_multiple_ct = True, other_cts = [ct2, ct3], other_pts = [pt2, pt3], **result)
 
+def fun9_compare_solve_and_sparse_solve():
+	pt_alphabet = "abcd"
+	ct_alphabet = "ABCDEFG"
+	ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
+	result = solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, write_cnf_then_exit = False)
+	result2 = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, write_cnf_then_exit = False)
+	print("-"*20 + "SPARSE RESULT" + "-"*20)
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
+	print("-"*20 + "NONSPARSE RESULT" + "-"*20)
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result2)
 
+def fun10_solve_sparse_parallel_ct():
+	pt = "abdbbacabaddcbaac"
+	pt_alphabet = "abcd"
+	ct_alphabet = "ABCDEF"
+	ct, permutation_table = generate_some_ct(pt, pt_alphabet, ct_alphabet, seed = 0, double_free = True, debug = True)
+	
+	pt2 = "bdbadccbdbccabdcdd"
+	pt2_array = dc.str_to_array(pt2, pt_alphabet)
+	ct2_array = dc.encrypt(pt2_array, permutation_table)
+	ct2 = dc.array_to_str(ct2_array, ct_alphabet)
+
+	pt3 = "bdbadccbdbccabdcdd"
+	pt3_array = dc.str_to_array(pt3, pt_alphabet)
+	ct3_array = dc.encrypt(pt3_array, permutation_table)
+	ct3 = dc.array_to_str(ct3_array, ct_alphabet)
+
+	print(ct)
+	print(ct2)
+	print(ct3)
+
+	result = solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = True, other_cts = [ct2, ct3], lazy_canonical_pt = True)
+	analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = pt, pt_alphabet = pt_alphabet, permutation_table = permutation_table, use_multiple_ct = True, other_cts = [ct2, ct3], other_pts = [pt2, pt3], **result)
 
 
 if __name__ == "__main__":
@@ -1250,18 +1444,7 @@ if __name__ == "__main__":
 	#fun6_solve_parallel_ct()
 	#fun7_test_cnf_size()
 	#fun8_another_parallel_solve()
-
-	#pt_alphabet = "abcd"
-	#ct_alphabet = "ABCDEFG"
-	#ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
-	#result = solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, cribs = [], debug = True)
-	#analyse_result(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, permutation_table = None, **result)
-
-	
-	pt_alphabet = "abcd"
-	ct_alphabet = "ABCDEFG"
-	ct = "AEBACDCADAEDEBEDEACBDACDBABCABCBC"
-	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, write_cnf_then_exit = False)
-	#solve(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt_alphabet = pt_alphabet, debug = True, write_cnf_then_exit = True)
+	#fun9_compare_solve_and_sparse_solve()
+	fun10_solve_sparse_parallel_ct()
 
 	
