@@ -41,6 +41,44 @@ def get_cnf_permutation(perm_length, offset = 0, return_no_clauses = False):
 
 	return num_var, num_clauses, clauses
 
+def get_cnf_permutation_optimized(perm_length, offset = 0, return_no_clauses = False):
+	if return_no_clauses:
+		# Just return the number of vars and clauses, but do not return clauses themselves
+		num_var = perm_length**2
+		num_clauses = 2 * perm_length + perm_length ** 2 * (perm_length - 1)
+		return num_var, num_clauses, []
+
+	#code = lambda x, y: x*perm_length + y + 1 + offset # assigns unique number to each entry (x,y) in permutation matrix
+
+	clauses = ""
+
+	# at least one per row
+	for i in range(perm_length):
+		clauses += " ".join([str(i*perm_length + j + 1 + offset) for j in range(perm_length)]) + " 0\n"
+
+	# at most one per row
+	for i in range(perm_length):
+		for j in range(perm_length):
+			temp = str(i*perm_length + j + 1 + offset)
+			for k in range(j + 1, perm_length):
+				clauses += "-" + temp + " -" + str(i*perm_length + k + 1 + offset) + " 0\n"
+
+	# at least one per column
+	for i in range(perm_length):
+		clauses += " ".join([str(j*perm_length + i + 1 + offset) for j in range(perm_length)]) + " 0\n"
+
+	# at most one per column
+	for i in range(perm_length):
+		for j in range(perm_length):
+			temp = str(j*perm_length + i + 1 + offset)
+			for k in range(j + 1, perm_length):
+				clauses += "-" + temp + " -" + str(k*perm_length + i + 1 + offset) + " 0\n"
+
+	num_var = perm_length**2
+	num_clauses = len(clauses)
+
+	return num_var, num_clauses, clauses
+
 def get_cnf_permutation_vector(perm_length, offset = 0, return_no_clauses = False):
 	num_var = 0
 	num_clauses = 0
@@ -223,6 +261,29 @@ def get_cnf_selector_permutation_product_with_vector(perm_length, selectors, off
 			for k in range(perm_length):
 				clauses += [[-(selectors[n] + 1), -code1(i, k), -code2(k), code3(i), 0]]
 				num_clauses += 1
+
+	return num_var, num_clauses, clauses
+
+def get_cnf_selector_permutation_product_with_vector_optimized(perm_length, selectors, offsets1, offset2, offset3, return_no_clauses = False):
+	# selectors is a list of codes for the selecting variables
+	# offsets1 is a list of offsets for the first factor
+	# offset2 is for the row vector (also length perm_length)
+	# offset3 is for the result vector (also length perm_length)
+	# assumes all three already exist
+
+	num_var = 0
+	num_clauses = len(offsets1) * (perm_length**2)
+	if return_no_clauses:
+		return num_var, num_clauses, []
+
+	clauses = ""
+
+	for n, offset1 in enumerate(offsets1):
+		temp = "-" + str(selectors[n] + 1)
+		for i in range(perm_length):
+			temp2 = str(i + offset3 + 1)
+			for k in range(perm_length):
+				clauses += temp + " -" + str(i*perm_length + k + 1 + offset1) + " -" + str(k + offset2 + 1) + " " + temp2 + " 0\n"
 
 	return num_var, num_clauses, clauses
 
@@ -781,6 +842,8 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	# I want an option for a canonical pt or partially canonical pt...
 	# --> lazy_canonical_pt
 
+	call_optimized_getcnf_function = True
+
 	## Next todo: other_cribs for the other pts if given
 
 	# cribs and lazy_canonical_pt are mutually exclusive, throw error if both set
@@ -873,18 +936,33 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	if debug: print("Creating permutation matrices for pt letters...")
 	for i in range(pt_alphabet_size):
 		if debug: print(f"> Processing {i+1}/{pt_alphabet_size}")
-		if not call_function_as_number_calculator:
-			num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
+		if not call_optimized_getcnf_function:
+			if not call_function_as_number_calculator:
+				num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 
+			else:
+				num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var(), return_no_clauses = True)
+
+				TOTAL_NUM_VARIABLES += num_var
+				TOTAL_NUM_CLAUSES += num_clauses
+			if write_cnf_incrementally and not call_function_as_number_calculator:
+				f.write(clauses_to_str_lines(clauses))
+				clauses = []
+			permutations += [{"type": "perm_matrix", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 		else:
-			num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var(), return_no_clauses = True)
+			# we dont care about readability, just speed
+			if not call_function_as_number_calculator:
+				num_var, num_clauses, clauses = get_cnf_permutation_optimized(perm_length, offset = total_var())
 
-			TOTAL_NUM_VARIABLES += num_var
-			TOTAL_NUM_CLAUSES += num_clauses
-		if write_cnf_incrementally and not call_function_as_number_calculator:
-			f.write(clauses_to_str_lines(clauses))
-			clauses = []
-		permutations += [{"type": "perm_matrix", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+			else:
+				num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var(), return_no_clauses = True)
+
+				TOTAL_NUM_VARIABLES += num_var
+				TOTAL_NUM_CLAUSES += num_clauses
+			if write_cnf_incrementally and not call_function_as_number_calculator:
+				f.write(clauses)
+				clauses = []
+			permutations += [{"type": "perm_matrix", "offset": total_var(), "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 	pt_letter_permutation_matrix_offsets = perm_matrix_offsets()
 
@@ -989,31 +1067,60 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 		# constrain the deck states sequentially as selector x permutation x old_deck = new_deck
 		# --> here we need to instead do the vector multiplication
 
+		# This seems to be by far the most expensive part of the operation
+		# TODO: Also do this in the multiple ct section
+
 		for i in range(len(needed_cards)-1):
 			if debug: print(f"> Processing {i+1}/{len(needed_cards)-1}")
-			for j in range(len(needed_cards[i])):
-				current_offset = deck_card_offsets[i][j]
 
-				# find offset of card in the next layer
-				next_cards = needed_cards[i+1]
-				if needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
-				next_offset = deck_card_offsets[i+1][next_cards.index(needed_cards[i][j])]
+			if not call_optimized_getcnf_function:
+				for j in range(len(needed_cards[i])):
+					current_offset = deck_card_offsets[i][j]
 
-				# contstrain as selector x permutation x old_card = new_card
-				if not call_function_as_number_calculator:
-					num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
+					# find offset of card in the next layer
+					next_cards = needed_cards[i+1]
+					if needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
+					next_offset = deck_card_offsets[i+1][next_cards.index(needed_cards[i][j])]
 
-				else:
-					num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset, return_no_clauses = True)
+					# contstrain as selector x permutation x old_card = new_card
+					if not call_function_as_number_calculator:
+						num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
 
-					TOTAL_NUM_VARIABLES += num_var
-					TOTAL_NUM_CLAUSES += num_clauses
-				if write_cnf_incrementally and not call_function_as_number_calculator:
-					f.write(clauses_to_str_lines(clauses))
-					clauses = []
-				permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+					else:
+						num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset, return_no_clauses = True)
 
-				# uhhhh not sure if selector_offsets should start at zero probably one shorter
+						TOTAL_NUM_VARIABLES += num_var
+						TOTAL_NUM_CLAUSES += num_clauses
+					if write_cnf_incrementally and not call_function_as_number_calculator:
+						f.write(clauses_to_str_lines(clauses))
+						clauses = []
+					permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
+			else:
+				# here we dont really care about readability, just speed
+
+				for j in range(len(needed_cards[i])):
+					current_offset = deck_card_offsets[i][j]
+
+					# find offset of card in the next layer
+					next_cards = needed_cards[i+1]
+					if needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
+					next_offset = deck_card_offsets[i+1][next_cards.index(needed_cards[i][j])]
+
+					# contstrain as selector x permutation x old_card = new_card
+					if not call_function_as_number_calculator:
+						num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector_optimized(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
+
+					else:
+						num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset, return_no_clauses = True)
+
+						TOTAL_NUM_VARIABLES += num_var
+						TOTAL_NUM_CLAUSES += num_clauses
+					if write_cnf_incrementally and not call_function_as_number_calculator:
+						f.write(clauses)
+						clauses = []
+					permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+
 
 		# constrain the top card
 		for i in range(pt_length):
@@ -1170,28 +1277,53 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 			# --> here we need to instead do the vector multiplication
 
 			if debug: print("Constraining the deck with the pt selectors...")
-			for i in range(len(other_needed_cards)-1):
-				for j in range(len(other_needed_cards[i])):
-					current_offset = other_deck_card_offsets[i][j]
+			if not call_optimized_getcnf_function:
+				for i in range(len(other_needed_cards)-1):
+					for j in range(len(other_needed_cards[i])):
+						current_offset = other_deck_card_offsets[i][j]
 
-					# find offset of card in the next layer
-					next_cards = other_needed_cards[i+1]
-					if other_needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
-					next_offset = other_deck_card_offsets[i+1][next_cards.index(other_needed_cards[i][j])]
+						# find offset of card in the next layer
+						next_cards = other_needed_cards[i+1]
+						if other_needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
+						next_offset = other_deck_card_offsets[i+1][next_cards.index(other_needed_cards[i][j])]
 
-					# contstrain as selector x permutation x old_card = new_card
-					if not call_function_as_number_calculator:
-						num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
+						# contstrain as selector x permutation x old_card = new_card
+						if not call_function_as_number_calculator:
+							num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
 
-					else:
-						num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset, return_no_clauses = True)
+						else:
+							num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset, return_no_clauses = True)
 
-						TOTAL_NUM_VARIABLES += num_var
-						TOTAL_NUM_CLAUSES += num_clauses
-					if write_cnf_incrementally and not call_function_as_number_calculator:
-						f.write(clauses_to_str_lines(clauses))
-						clauses = []
-					permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+							TOTAL_NUM_VARIABLES += num_var
+							TOTAL_NUM_CLAUSES += num_clauses
+						if write_cnf_incrementally and not call_function_as_number_calculator:
+							f.write(clauses_to_str_lines(clauses))
+							clauses = []
+						permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
+			else:
+				# we dont care about readability, just speed
+				for i in range(len(other_needed_cards)-1):
+					for j in range(len(other_needed_cards[i])):
+						current_offset = other_deck_card_offsets[i][j]
+
+						# find offset of card in the next layer
+						next_cards = other_needed_cards[i+1]
+						if other_needed_cards[i][j] not in next_cards: continue # the card does not appear in the next layer
+						next_offset = other_deck_card_offsets[i+1][next_cards.index(other_needed_cards[i][j])]
+
+						# contstrain as selector x permutation x old_card = new_card
+						if not call_function_as_number_calculator:
+							num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector_optimized(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset)
+
+						else:
+							num_var, num_clauses, clauses =  get_cnf_selector_permutation_product_with_vector(perm_length, selectors = [other_selector_offsets[i] + j for j in range(pt_alphabet_size)], offsets1 = pt_letter_permutation_matrix_offsets, offset2 = current_offset, offset3 = next_offset, return_no_clauses = True)
+
+							TOTAL_NUM_VARIABLES += num_var
+							TOTAL_NUM_CLAUSES += num_clauses
+						if write_cnf_incrementally and not call_function_as_number_calculator:
+							f.write(clauses)
+							clauses = []
+						permutations += [{"type": "constraint_perm_vector_product", "offset": 0, "num_var": num_var, "num_clauses": num_clauses, "clauses": clauses}]
 
 					# uhhhh not sure if selector_offsets should start at zero probably one shorter
 
@@ -1263,7 +1395,10 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 		return {}
 
 	if debug: print("Running kissat...")
-	subprocess.run(["./run_kissat_permutation.sh"])
+	if not use_compression:
+		subprocess.run(["./run_kissat_permutation.sh"])
+	else:
+		subprocess.run(["./run_kissat_permutation_compressed.sh"])
 
 	if debug: print("Results:")
 	with open("permutation_test_result.txt", "r") as f:
@@ -1735,15 +1870,9 @@ def fun11_encode_eyes():
 	pt_alphabet = "".join([chr(i) for i in range(65, 65+26)])
 	ct_alphabet = "".join([chr(i) for i in range(33, 33+83)])
 
-	ct = dc.array_to_str(eyes.west_1, ct_alphabet)
+	ct = dc.array_to_str(eyes.west_1[:5], ct_alphabet)
 	
 	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, write_cnf_then_exit = True, write_cnf_incrementally = True, use_compression = True)
-
-	# --> runs out of memory!! need to do incremental writing...
-	# concept: give every cnf function an additional parameter that simply calculates the required number of variables
-	# then call every single function once to get the total number of var and clauses that will be written
-	# then write that and call the solve function again and write every clause (or maybe clause block) incrementally
-
 
 
 if __name__ == "__main__":
