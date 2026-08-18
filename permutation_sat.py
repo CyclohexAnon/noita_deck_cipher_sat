@@ -1,6 +1,7 @@
 import subprocess
 import numpy as np
 import deckcipher as dc
+import lzma
 
 # Generate a permutation SAT file
 
@@ -762,7 +763,7 @@ def solve(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_tab
 		# UNSATISFIABLE
 		return {"satisfiable" : False}
 
-def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, cribs = [], other_cribs = [], write_cnf_incrementally = False, call_function_as_number_calculator = False):
+def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = True, write_cnf_then_exit = False, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, cribs = [], other_cribs = [], write_cnf_incrementally = False, call_function_as_number_calculator = False, use_compression = False):
 	# write_cnf_incrementally makes it such that the function writes the cnf incrementally which saves on memory when writing
 
 	# basically the same as solve but we omit lower columns (cards) that dont matter anymore,
@@ -789,15 +790,17 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	TOTAL_NUM_VARIABLES = 0
 	TOTAL_NUM_CLAUSES   = 0
 	if write_cnf_incrementally:
-		TOTAL_NUM_VARIABLES, TOTAL_NUM_CLAUSES = solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt, debug, write_cnf_then_exit, use_multiple_ct, other_cts, lazy_canonical_pt, cribs, other_cribs, write_cnf_incrementally = False, call_function_as_number_calculator = True)
+		TOTAL_NUM_VARIABLES, TOTAL_NUM_CLAUSES = solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt, False, write_cnf_then_exit, use_multiple_ct, other_cts, lazy_canonical_pt, cribs, other_cribs, write_cnf_incrementally = False, call_function_as_number_calculator = True)
 
 		print(f"{TOTAL_NUM_VARIABLES = }\n{TOTAL_NUM_CLAUSES = }")
 		print("-"*10 + " starting write "  + "-"*10)
 		#exit()
 
 		# TODO: Write to CNF file
-
-		f = open("permutation_test.cnf", "w")
+		if use_compression:
+			f = lzma.open("permutation_test.cnf.xz", "wt")
+		else:
+			f = open("permutation_test.cnf", "w")
 		f.write(f"p cnf {TOTAL_NUM_VARIABLES} {TOTAL_NUM_CLAUSES}\n")
 
 	clause_to_str_line = lambda x: " ".join(list(map(str, x)))
@@ -869,6 +872,7 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	# create permutation matrices for each plain text letter
 	if debug: print("Creating permutation matrices for pt letters...")
 	for i in range(pt_alphabet_size):
+		if debug: print(f"> Processing {i+1}/{pt_alphabet_size}")
 		if not call_function_as_number_calculator:
 			num_var, num_clauses, clauses = get_cnf_permutation(perm_length, offset = total_var())
 
@@ -906,6 +910,7 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 	deck_card_offsets = []
 	for i in range(len(needed_cards)):
 		# create the deck states
+		if debug: print(f"> Processing {i+1}/{len(needed_cards)}")
 		deck_card_offsets += [[]]
 		for card in needed_cards[i]:
 			# card is the cards we need
@@ -985,6 +990,7 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 		# --> here we need to instead do the vector multiplication
 
 		for i in range(len(needed_cards)-1):
+			if debug: print(f"> Processing {i+1}/{len(needed_cards)-1}")
 			for j in range(len(needed_cards[i])):
 				current_offset = deck_card_offsets[i][j]
 
@@ -1092,6 +1098,7 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 			other_deck_card_offsets = []
 			for i in range(len(other_needed_cards)):
 				# create the deck states
+				if debug: print(f"> Processing {i+1}/{len(other_needed_cards)-1}")
 				other_deck_card_offsets += [[]]
 				for card in other_needed_cards[i]:
 					# card is the cards we need
@@ -1234,11 +1241,18 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 
 	if not write_cnf_incrementally:
 		if debug: print("Writing CNF...")
-		with open("permutation_test.cnf", "w") as f:
-			f.write(f"p cnf {total_var()} {total_clauses()}\n")
-			ac = all_clauses()
-			for clause in ac:
-				f.write(" ".join(list(map(str, clause))) + "\n")
+		if use_compression:
+			with lzma.open("permutation_test.cnf", "wt") as f:
+				f.write(f"p cnf {total_var()} {total_clauses()}\n")
+				ac = all_clauses()
+				for clause in ac:
+					f.write(" ".join(list(map(str, clause))) + "\n")
+		else:
+			with open("permutation_test.cnf", "w") as f:
+				f.write(f"p cnf {total_var()} {total_clauses()}\n")
+				ac = all_clauses()
+				for clause in ac:
+					f.write(" ".join(list(map(str, clause))) + "\n")
 	else:
 		f.close()
 
@@ -1723,7 +1737,7 @@ def fun11_encode_eyes():
 
 	ct = dc.array_to_str(eyes.west_1, ct_alphabet)
 	
-	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, write_cnf_then_exit = True, write_cnf_incrementally = True)
+	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, write_cnf_then_exit = True, write_cnf_incrementally = True, use_compression = True)
 
 	# --> runs out of memory!! need to do incremental writing...
 	# concept: give every cnf function an additional parameter that simply calculates the required number of variables
