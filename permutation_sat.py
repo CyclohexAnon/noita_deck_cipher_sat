@@ -1,6 +1,7 @@
 import subprocess
 import numpy as np
 import deckcipher as dc
+import lzma_mt
 import lzma
 
 # Generate a permutation SAT file
@@ -861,7 +862,8 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 
 		# TODO: Write to CNF file
 		if use_compression:
-			f = lzma.open("permutation_test.cnf.xz", "wt")
+			#f = lzma.open("permutation_test.cnf.xz", "wt")
+			f = lzma_mt.open("permutation_test.cnf.xz", "wt", threads = 13)
 		else:
 			f = open("permutation_test.cnf", "w")
 		f.write(f"p cnf {TOTAL_NUM_VARIABLES} {TOTAL_NUM_CLAUSES}\n")
@@ -1205,7 +1207,7 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 			other_deck_card_offsets = []
 			for i in range(len(other_needed_cards)):
 				# create the deck states
-				if debug: print(f"> Processing {i+1}/{len(other_needed_cards)-1}")
+				if debug: print(f"> Processing {i+1}/{len(other_needed_cards)}")
 				other_deck_card_offsets += [[]]
 				for card in other_needed_cards[i]:
 					# card is the cards we need
@@ -1303,6 +1305,7 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 			else:
 				# we dont care about readability, just speed
 				for i in range(len(other_needed_cards)-1):
+					if debug: print(f"> Processing {i+1}/{len(other_needed_cards)-1}")
 					for j in range(len(other_needed_cards[i])):
 						current_offset = other_deck_card_offsets[i][j]
 
@@ -1870,9 +1873,28 @@ def fun11_encode_eyes():
 	pt_alphabet = "".join([chr(i) for i in range(65, 65+26)])
 	ct_alphabet = "".join([chr(i) for i in range(33, 33+83)])
 
-	ct = dc.array_to_str(eyes.west_1[:5], ct_alphabet)
+	ct1 = dc.array_to_str(eyes.west_1, ct_alphabet)
+	ct2 = dc.array_to_str(eyes.east_1, ct_alphabet)
+	ct3 = dc.array_to_str(eyes.west_2, ct_alphabet)
+	ct4 = dc.array_to_str(eyes.east_2, ct_alphabet)
+	ct5 = dc.array_to_str(eyes.west_3, ct_alphabet)
+	ct6 = dc.array_to_str(eyes.east_3, ct_alphabet)
+	ct7 = dc.array_to_str(eyes.west_4, ct_alphabet)
+	ct8 = dc.array_to_str(eyes.east_4, ct_alphabet)
+	ct9 = dc.array_to_str(eyes.east_5, ct_alphabet)
+
+	solve_sparse(use_known_pt = False, ct = ct1, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = True, other_cts = [ct2, ct3, ct4, ct5, ct6, ct7, ct8, ct9], lazy_canonical_pt = False, write_cnf_then_exit = True, write_cnf_incrementally = True, use_compression = True)
+
+	#import cProfile
+	#import pstats
+
+	#with cProfile.Profile() as profile:
+	#	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, write_cnf_then_exit = True, write_cnf_incrementally = True, use_compression = True)
+		
+	#results = pstats.Stats(profile)
+	#results.sort_stats(pstats.SortKey.TIME)
+	#results.print_stats(10)
 	
-	solve_sparse(use_known_pt = False, ct = ct, ct_alphabet = ct_alphabet, pt = None, pt_alphabet = pt_alphabet, debug = True, use_multiple_ct = False, other_cts = [], lazy_canonical_pt = False, write_cnf_then_exit = True, write_cnf_incrementally = True, use_compression = True)
 
 
 if __name__ == "__main__":
