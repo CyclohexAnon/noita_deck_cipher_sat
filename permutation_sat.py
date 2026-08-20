@@ -1496,6 +1496,18 @@ def solve_sparse(use_known_pt, ct, ct_alphabet, pt_alphabet, pt = None, debug = 
 
 
 
+def solve_with_omflip():
+	# express the problem using omega-flip networks to calculate the permutations instead of matrix multiplication
+
+	pass
+
+	# structure:
+	# deck: per state array of 128x7 where the last 42 bits are all set to 1 and the first are all set to 0,1,2...82 in binary
+	# make as many deck states as needed and connect them via omega-flip permutation networks
+	# the selection variables introduced here are connected to the pt selectors
+	# finally set the other restrictions like the top card in the deck states
+	# issue: idk how I would encode the fact that no two permutations can have the same top card (reversibility reasons)...
+
 
 
 def analyse_result(use_known_pt, ct_alphabet, ct, pt_alphabet, pt = None, permutation_table = None, permutation_table_reconstructed = None, reconstructed_pt = None, satisfiable = None, parent_permutation = None, use_multiple_ct = False, other_cts = [], other_reconstructed_pts = [], other_pts = []):
