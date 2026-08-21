@@ -125,6 +125,6 @@ if bits%2 == 1:
 
 print(f"{number_of_vars = }\n{number_of_clauses = }")
 
-with open("omeganetwork.cnf", "w") as f:
-	f.write(f"p cnf {number_of_vars} {number_of_clauses}\n")
-	f.write("\n".join([" ".join(map(str, c)) for c in clauses]))
+#with open("omeganetwork.cnf", "w") as f:
+#	f.write(f"p cnf {number_of_vars} {number_of_clauses}\n")
+#	f.write("\n".join([" ".join(map(str, c)) for c in clauses]))

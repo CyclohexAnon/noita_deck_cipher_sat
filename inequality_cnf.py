@@ -16,3 +16,7 @@ for (a, b, c) in zip(aux_var, list1, list2):
 				[-a, -b,  c,  0],
 				[ a,  b,  c,  0],
 				[ a, -b, -c,  0]]
+clauses += [[-i for i in aux_var] + [0]]
+
+num_clauses = length*4 + 1
+num_var = length
